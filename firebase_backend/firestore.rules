@@ -1,0 +1,83 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userRole() {
+      return request.auth.token.role != null
+        ? request.auth.token.role
+        : get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isMaster() {
+      return isSignedIn() && userRole() == 'MASTER';
+    }
+
+    function isAdminOrMaster() {
+      return isSignedIn() && (userRole() == 'MASTER' || userRole() == 'ADMIN');
+    }
+
+    function isAssignedAgent(agentId) {
+      return isSignedIn() && request.auth.uid == agentId;
+    }
+
+    // Users / Officer Profiles
+    match /users/{uid} {
+      allow read: if isAdminOrMaster() || (isSignedIn() && request.auth.uid == uid);
+      allow write: if isMaster();
+    }
+
+    // Table 1: borrowers
+    match /borrowers/{borrowerId} {
+      allow read: if isAdminOrMaster() || isAssignedAgent(resource.data.assigned_agent_id);
+      allow create: if isAdminOrMaster() || isAssignedAgent(request.resource.data.assigned_agent_id);
+      allow update: if isAdminOrMaster() || isAssignedAgent(resource.data.assigned_agent_id);
+      allow delete: if isMaster();
+    }
+
+    // Table 2: loan_products
+    match /loan_products/{productId} {
+      allow read: if isSignedIn();
+      allow write: if isMaster();
+    }
+
+    // Table 3: loans
+    match /loans/{loanId} {
+      allow read: if isAdminOrMaster() || isAssignedAgent(resource.data.assigned_agent_id);
+      allow create: if isAdminOrMaster();
+      allow update: if isAdminOrMaster() || isAssignedAgent(resource.data.assigned_agent_id);
+      allow delete: if false; // Loan records are closed or written off, never hard-deleted
+    }
+
+    // Table 4: installment_schedule (Versioned, never deleted)
+    match /installment_schedule/{installmentId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdminOrMaster() || isSignedIn();
+      allow delete: if false; // Restructuring marks old rows SUPERSEDED
+    }
+
+    // Table 5: transactions (IMMUTABLE APPEND-ONLY LEDGER)
+    match /transactions/{txnId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.total_amount >= 0
+        && (
+          request.resource.data.txn_type != 'REVERSAL'
+          || isMaster()
+        );
+      allow update, delete: if false; // Append-only: reversals MUST insert a REVERSAL contra-entry
+    }
+
+    // Table 6: collection_logs
+    match /collection_logs/{logId} {
+      allow read: if isAdminOrMaster() || isAssignedAgent(resource.data.agent_id);
+      allow create: if isAdminOrMaster() || isAssignedAgent(request.resource.data.agent_id);
+      allow update: if isAdminOrMaster() || isAssignedAgent(resource.data.agent_id);
+      allow delete: if false;
+    }
+  }
+}

@@ -1,0 +1,16 @@
+*.iml
+.idea/
+.DS_Store
+build/
+*.lock# Build & IDE
+/build/
+/.dart_tool/
+/.idea/
+*.iml
+
+# Firebase & Signing Secrets
+/firebase-debug*.log
+.firebaserc
+.env
+android/key.properties
+android/app/google-services.json

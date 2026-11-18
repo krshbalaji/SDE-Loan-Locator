@@ -1,0 +1,198 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../engines/delinquency_engine.dart';
+import '../../models/collection_log_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/firestore_loan_service.dart';
+import '../../utils/indian_formatters.dart';
+import '../collections/collections_queue_screen.dart';
+import '../loans/loan_list_screen.dart';
+import '../map/field_locator_map_screen.dart';
+
+/// Field Agent workspace strictly scoped to `assigned_agent_id == currentUser.uid`.
+class AgentHomeScreen extends StatefulWidget {
+  const AgentHomeScreen({super.key});
+
+  @override
+  State<AgentHomeScreen> createState() => _AgentHomeScreenState();
+}
+
+class _AgentHomeScreenState extends State<AgentHomeScreen> {
+  int _selectedIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthService>();
+    final portfolio = context.watch<LoanPortfolioProvider>();
+    final user = auth.currentUser!;
+
+    final myLoans = portfolio.loans
+        .where((l) => l.assignedAgentId == user.uid)
+        .toList();
+    final myLogs = portfolio.collectionLogs
+        .where((l) => l.agentId == user.uid)
+        .toList();
+
+    final kpi = DelinquencyEngine.computePortfolioKpis(
+      loans: myLoans,
+      transactions: portfolio.transactions
+          .where((t) => t.collectedByUid == user.uid)
+          .toList(),
+      agentNames: {user.uid: user.displayName},
+      asOfDate: DateTime.now(),
+    );
+
+    final openPtps =
+        myLogs.where((l) => l.ptpStatus == PtpStatus.open).toList();
+    final brokenPtps =
+        myLogs.where((l) => l.ptpStatus == PtpStatus.broken).toList();
+
+    final pages = [
+      ListView(
+        padding: const EdgeInsets.all(14),
+        children: [
+          Card(
+            color: Theme.of(context).colorScheme.primaryContainer,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Welcome, ${user.displayName}',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  Text('Branch: ${user.branch} • Assigned Accounts: ${myLoans.length}'),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 6,
+                    children: [
+                      Text(
+                        'MTD Collected: ${IndianFormatters.formatInr(kpi.collectedMtd, showDecimals: false)}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text('Open PTPs: ${openPtps.length}'),
+                      Text(
+                        'Broken PTPs: ${brokenPtps.length}',
+                        style: TextStyle(
+                          color: brokenPtps.isNotEmpty
+                              ? Colors.red.shade800
+                              : null,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => setState(() => _selectedIndex = 1),
+                  icon: const Icon(Icons.route),
+                  label: const Text('Start Field Route'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  onPressed: () => setState(() => _selectedIndex = 2),
+                  icon: const Icon(Icons.assignment_late),
+                  label: const Text('Collections Queue'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Active Open / Broken PTP Follow-ups',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          if (openPtps.isEmpty && brokenPtps.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('No pending PTP follow-ups right now.'),
+              ),
+            ),
+          for (final log in [...brokenPtps, ...openPtps])
+            Card(
+              child: ListTile(
+                leading: Icon(
+                  log.ptpStatus == PtpStatus.broken
+                      ? Icons.warning
+                      : Icons.event_available,
+                  color: log.ptpStatus == PtpStatus.broken
+                      ? Colors.red.shade700
+                      : Colors.amber.shade800,
+                ),
+                title: Text(
+                  '${portfolio.borrowerById(log.borrowerId)?.fullName ?? log.borrowerId} • ${log.loanId}',
+                ),
+                subtitle: Text(
+                  '${log.ptpStatus.label} • ${log.ptpDate != null ? IndianFormatters.formatDate(log.ptpDate!) : "-"} • '
+                  '${IndianFormatters.formatInr(log.ptpAmount ?? 0, showDecimals: false)}\n${log.notes}',
+                ),
+              ),
+            ),
+        ],
+      ),
+      FieldLocatorMapScreen(lockedAgentId: user.uid),
+      CollectionsQueueScreen(agentIdFilter: user.uid),
+      LoanListScreen(agentIdFilter: user.uid),
+    ];
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Field Officer • ${user.displayName.split(" (").first}'),
+        actions: [
+          IconButton(
+            tooltip: 'Sign Out',
+            icon: const Icon(Icons.logout),
+            onPressed: () => auth.signOut(),
+          ),
+        ],
+      ),
+      body: pages[_selectedIndex],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.today_outlined),
+            selectedIcon: Icon(Icons.today),
+            label: 'Today',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.map_outlined),
+            selectedIcon: Icon(Icons.map),
+            label: 'Field Map',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.assignment_late_outlined),
+            selectedIcon: Icon(Icons.assignment_late),
+            label: 'Queue',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.folder_shared_outlined),
+            selectedIcon: Icon(Icons.folder_shared),
+            label: 'My Loans',
+          ),
+        ],
+      ),
+    );
+  }
+}

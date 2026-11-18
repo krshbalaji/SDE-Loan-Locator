@@ -1,0 +1,232 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/loan_product_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/excel_import_service.dart';
+import '../../services/firestore_loan_service.dart';
+import '../../utils/indian_formatters.dart';
+
+/// Admin/Master Smart `.xlsx` Bulk Ingestion Screen.
+/// Backward-compatible with legacy 7-column sheets (`Location`, `ApplicationNo`,
+/// `LoanNo`, `CustomerName`, `Amount`, `LatLong`, `MobileNo`) + deduplication preview.
+class ExcelImportScreen extends StatefulWidget {
+  const ExcelImportScreen({super.key});
+
+  @override
+  State<ExcelImportScreen> createState() => _ExcelImportScreenState();
+}
+
+class _ExcelImportScreenState extends State<ExcelImportScreen> {
+  ExcelParseResult? _parseResult;
+  LoanProductModel? _selectedProduct;
+  String _selectedAgentId = 'uid_agent_karthik';
+  bool _committing = false;
+
+  Future<void> _pickExcel(LoanPortfolioProvider portfolio) async {
+    final result = await ExcelImportService.pickAndParseExcel(
+      existingBorrowers: portfolio.borrowers,
+      existingLoans: portfolio.loans,
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _parseResult = result;
+      _selectedProduct ??=
+          portfolio.products.isNotEmpty ? portfolio.products.first : null;
+    });
+  }
+
+  Future<void> _commit(
+    LoanPortfolioProvider portfolio,
+    AuthService auth,
+  ) async {
+    final parse = _parseResult;
+    final product = _selectedProduct ??
+        (portfolio.products.isNotEmpty ? portfolio.products.first : null);
+    if (parse == null || product == null) return;
+
+    setState(() => _committing = true);
+    try {
+      final count = await ExcelImportService.commitImport(
+        parseResult: parse,
+        portfolio: portfolio,
+        defaultProduct: product,
+        assignedAgentId: _selectedAgentId,
+        importedByUid: auth.currentUser?.uid ?? 'uid_admin_meena',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Imported $count loan(s) with schedules & disbursement ledger entries.',
+          ),
+        ),
+      );
+      setState(() => _parseResult = null);
+    } finally {
+      if (mounted) setState(() => _committing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final portfolio = context.watch<LoanPortfolioProvider>();
+    final auth = context.watch<AuthService>();
+    final product = _selectedProduct ??
+        (portfolio.products.isNotEmpty ? portfolio.products.first : null);
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Smart Excel (.xlsx) Bulk Ingestion',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Expected Columns: Location, ApplicationNo, LoanNo, CustomerName, Amount, LatLong, MobileNo (optional: PAN, Tenure). '
+                  'Automatically deduplicates borrowers by mobile (+91) and skips existing LoanNos.',
+                  style: TextStyle(fontSize: 13, color: Colors.black54),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (product != null)
+                      SizedBox(
+                        width: 260,
+                        child: DropdownButtonFormField<LoanProductModel>(
+                          value: product,
+                          decoration: const InputDecoration(
+                            labelText: 'Default Loan Product',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          items: portfolio.products
+                              .map(
+                                (p) => DropdownMenuItem(
+                                  value: p,
+                                  child: Text(p.productName),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) =>
+                              setState(() => _selectedProduct = v),
+                        ),
+                      ),
+                    SizedBox(
+                      width: 220,
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedAgentId,
+                        decoration: const InputDecoration(
+                          labelText: 'Assign to Agent',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: auth.knownAgentNames.entries
+                            .map(
+                              (e) => DropdownMenuItem(
+                                value: e.key,
+                                child: Text(e.value.split(' (').first),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) setState(() => _selectedAgentId = v);
+                        },
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed: () => _pickExcel(portfolio),
+                      icon: const Icon(Icons.upload_file),
+                      label: const Text('Select .xlsx File'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_parseResult != null) ...[
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Preview: ${_parseResult!.fileName} '
+                          '(${_parseResult!.validCount} valid / ${_parseResult!.rows.length} rows)',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      FilledButton.icon(
+                        onPressed:
+                            _committing || _parseResult!.validCount == 0
+                                ? null
+                                : () => _commit(portfolio, auth),
+                        icon: _committing
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.cloud_upload),
+                        label: Text('Import ${_parseResult!.validCount} Loans'),
+                      ),
+                    ],
+                  ),
+                  if (_parseResult!.errors.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        _parseResult!.errors.join('\n'),
+                        style: TextStyle(color: Colors.red.shade700),
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  for (final row in _parseResult!.rows)
+                    ListTile(
+                      dense: true,
+                      leading: Icon(
+                        row.isValid ? Icons.check_circle : Icons.error_outline,
+                        color: row.isValid
+                            ? Colors.green.shade700
+                            : Colors.red.shade700,
+                      ),
+                      title: Text(
+                        'Row ${row.rowNumber}: ${row.customerName} (${row.loanNo.isEmpty ? "Auto ID" : row.loanNo}) — '
+                        '${IndianFormatters.formatInr(row.amount, showDecimals: false)}',
+                      ),
+                      subtitle: Text(
+                        '${row.mobilePrimary} • ${row.location}'
+                        '${row.latitude != null ? " • (${row.latitude!.toStringAsFixed(4)}, ${row.longitude!.toStringAsFixed(4)})" : ""}'
+                        '${row.warnings.isNotEmpty ? "\n⚠ ${row.warnings.join('; ')}" : ""}',
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
