@@ -13,4 +13,4 @@ build/
 .firebaserc
 .env
 android/key.properties
-android/app/google-services.json
+# android/app/google-services.json

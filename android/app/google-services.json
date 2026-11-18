@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "190103819067",
+    "project_id": "sde-loan-locator",
+    "storage_bucket": "sde-loan-locator.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:190103819067:android:0988d712fd8f4db74add1e",
+        "android_client_info": {
+          "package_name": "com.example.loan_locator_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCslKg4tRM2v2R9UnZYqtz9xzploBMsZ6o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -30,19 +30,20 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: _placeholder,
-    appId: '1:000000000000:web:placeholder',
-    messagingSenderId: '000000000000',
-    projectId: 'sde-loan-locator-demo',
-    authDomain: 'sde-loan-locator-demo.firebaseapp.com',
-    storageBucket: 'sde-loan-locator-demo.appspot.com',
+    apiKey: 'AIzaSyAAYbXhzIcX8sqAaPttowdYYe2mBneLwsw',
+    appId: '1:190103819067:web:4271dbb3324966db4add1e',
+    messagingSenderId: '190103819067',
+    projectId: 'sde-loan-locator',
+    authDomain: 'sde-loan-locator.firebaseapp.com',
+    storageBucket: 'sde-loan-locator.firebasestorage.app',
+    measurementId: 'G-NB7ZH11ZWG',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: _placeholder,
-    appId: '1:000000000000:android:placeholder',
-    messagingSenderId: '000000000000',
-    projectId: 'sde-loan-locator-demo',
-    storageBucket: 'sde-loan-locator-demo.appspot.com',
+    apiKey: 'AIzaSyCslKg4tRM2v2R9UnZYqtz9xzploBMsZ6o',
+    appId: '1:190103819067:android:0988d712fd8f4db74add1e',
+    messagingSenderId: '190103819067',
+    projectId: 'sde-loan-locator',
+    storageBucket: 'sde-loan-locator.firebasestorage.app',
   );
 }
