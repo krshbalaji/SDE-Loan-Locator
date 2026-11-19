@@ -8,6 +8,7 @@ import '../engines/geo_filter_engine.dart';
 import '../models/borrower_model.dart';
 import '../models/loan_model.dart';
 import '../models/loan_product_model.dart';
+import '../models/transaction_model.dart';
 import '../utils/indian_formatters.dart';
 import 'firestore_loan_service.dart';
 
@@ -634,3 +635,4 @@ class ExcelImportService {
     return val.toString().trim();
   }
 }
+
