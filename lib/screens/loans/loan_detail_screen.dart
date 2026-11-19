@@ -1,4 +1,5 @@
-﻿import 'dart:convert';
+import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -1049,4 +1050,5 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     );
   }
 }
+
 
