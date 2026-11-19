@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/loan_product_model.dart';
@@ -7,9 +7,10 @@ import '../../services/excel_import_service.dart';
 import '../../services/firestore_loan_service.dart';
 import '../../utils/indian_formatters.dart';
 
-/// Admin/Master Smart `.xlsx` Bulk Ingestion Screen.
-/// Backward-compatible with legacy 7-column sheets (`Location`, `ApplicationNo`,
-/// `LoanNo`, `CustomerName`, `Amount`, `LatLong`, `MobileNo`) + deduplication preview.
+/// Admin/Master Smart `.xlsx` & `.csv` Bulk Ingestion Screen.
+/// Supports both legacy 7-column sheets (`Location`, `ApplicationNo`, `LoanNo`,
+/// `CustomerName`, `Amount`, `LatLong`, `MobileNo`) and full NBFC master sheets
+/// (`LOAN_ID`, `APPLICANT_NAME`, `SANCTION_AMOUNT`, `ROI`, `TENURE`, `MOB`, `DPD`, `PROPERTY_LATLONG`, etc.).
 class ExcelImportScreen extends StatefulWidget {
   const ExcelImportScreen({super.key});
 
@@ -85,7 +86,7 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Smart Excel (.xlsx) Bulk Ingestion',
+                  'Smart Excel (.xlsx) & NBFC Master (.csv) Bulk Ingestion',
                   style: Theme.of(context)
                       .textTheme
                       .titleLarge
@@ -93,8 +94,8 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  'Expected Columns: Location, ApplicationNo, LoanNo, CustomerName, Amount, LatLong, MobileNo (optional: PAN, Tenure). '
-                  'Automatically deduplicates borrowers by mobile (+91) and skips existing LoanNos.',
+                  'Supports standard sheets (Location, ApplicationNo, LoanNo, CustomerName, Amount, LatLong, MobileNo) '
+                  'AND full NBFC master headers (LOAN_ID, APPLICANT_NAME, SANCTION_AMOUNT, ROI, TENURE, MOB, DPD, PROPERTY_LATLONG, PAN_NO, CERSAI_ID).',
                   style: TextStyle(fontSize: 13, color: Colors.black54),
                 ),
                 const SizedBox(height: 14),
@@ -150,7 +151,7 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
                     FilledButton.icon(
                       onPressed: () => _pickExcel(portfolio),
                       icon: const Icon(Icons.upload_file),
-                      label: const Text('Select .xlsx File'),
+                      label: const Text('Select .xlsx / .csv File'),
                     ),
                   ],
                 ),
@@ -217,6 +218,7 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
                       ),
                       subtitle: Text(
                         '${row.mobilePrimary} • ${row.location}'
+                        '${row.monthsOnBooks != null ? " • MOB ${row.monthsOnBooks}/${row.tenureInstallments}" : ""}'
                         '${row.latitude != null ? " • (${row.latitude!.toStringAsFixed(4)}, ${row.longitude!.toStringAsFixed(4)})" : ""}'
                         '${row.warnings.isNotEmpty ? "\n⚠ ${row.warnings.join('; ')}" : ""}',
                       ),

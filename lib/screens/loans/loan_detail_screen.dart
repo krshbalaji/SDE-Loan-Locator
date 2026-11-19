@@ -1,5 +1,9 @@
+﻿import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 import '../../engines/amortization_engine.dart';
@@ -16,7 +20,8 @@ import '../../utils/indian_formatters.dart';
 import '../../widgets/ptp_log_bottom_sheet.dart';
 import 'what_if_simulator_screen.dart';
 
-/// Individual Loan 360° File: KYC, Geo-Pin, Payoff Split Chart, Versioned Schedule,
+/// Individual Loan 360° File: KYC, Geo-Pin, Principal vs. Interest Breakdown,
+/// Tenure Progress, Appraisal Strip, CSV/PDF Export, Versioned Schedule,
 /// Immutable Transactions Ledger (with Master Reversal), and Collection / PTP Logs.
 class LoanDetailScreen extends StatefulWidget {
   const LoanDetailScreen({super.key, required this.loanId});
@@ -29,6 +34,59 @@ class LoanDetailScreen extends StatefulWidget {
 
 class _LoanDetailScreenState extends State<LoanDetailScreen> {
   int? _selectedScheduleVersion;
+
+  Future<void> _exportLoanCsv({
+    required BorrowerModel? borrower,
+    required LoanModel loan,
+    required List<InstallmentModel> schedule,
+  }) async {
+    final buf = StringBuffer();
+    buf.writeln('LOAN_ID,APPLICATION_NO,BORROWER_NAME,MOBILE_NO,PAN_NO,CERSAI_ID,CREDIT_SCORE,LTV_PCT,FOIR_PCT,SANCTION_AMOUNT,NET_DISBURSED,ROI_ANNUAL,TENURE,EMI_AMOUNT,PRINCIPAL_OUTSTANDING,INTEREST_OUTSTANDING,FEES_OUTSTANDING,DPD,AGING_BUCKET,STATUS');
+    buf.writeln([
+      loan.loanId,
+      loan.applicationNo,
+      '"${(borrower?.fullName ?? '').replaceAll('"', '""')}"',
+      borrower?.mobilePrimary ?? '',
+      borrower?.panNumber ?? '',
+      borrower?.cersaiId ?? '',
+      borrower?.creditScore?.toString() ?? '',
+      loan.ltvPct?.toStringAsFixed(1) ?? '',
+      loan.foirPct?.toStringAsFixed(1) ?? '',
+      loan.principalSanctioned.toStringAsFixed(2),
+      loan.netDisbursedAmount.toStringAsFixed(2),
+      loan.interestRateAnnual.toStringAsFixed(2),
+      loan.tenureInstallments,
+      loan.emiAmount.toStringAsFixed(2),
+      loan.principalOutstanding.toStringAsFixed(2),
+      loan.interestOutstanding.toStringAsFixed(2),
+      loan.feesOutstanding.toStringAsFixed(2),
+      loan.dpd,
+      loan.agingBucket.label,
+      loan.status.label,
+    ].join(','));
+
+    buf.writeln('');
+    buf.writeln('INSTALLMENT_NO,DUE_DATE,OPENING_PRINCIPAL,PRINCIPAL_DUE,INTEREST_DUE,TOTAL_DUE,PRINCIPAL_PAID,INTEREST_PAID,STATUS');
+    for (final row in schedule) {
+      buf.writeln([
+        row.installmentNo,
+        IndianFormatters.formatDate(row.dueDate),
+        row.openingPrincipal.toStringAsFixed(2),
+        row.principalDue.toStringAsFixed(2),
+        row.interestDue.toStringAsFixed(2),
+        row.totalDue.toStringAsFixed(2),
+        row.principalPaid.toStringAsFixed(2),
+        row.interestPaid.toStringAsFixed(2),
+        row.status.label,
+      ].join(','));
+    }
+
+    final csvBytes = Uint8List.fromList(utf8.encode(buf.toString()));
+    await Printing.sharePdf(
+      bytes: csvBytes,
+      filename: 'Loan_Report_${loan.loanId}.csv',
+    );
+  }
 
   Future<void> _recordPaymentDialog(
     LoanPortfolioProvider portfolio,
@@ -84,7 +142,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                   controller: amountCtrl,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: 'Amount (₹)',
+                    labelText: 'Amount (INR)',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -246,6 +304,15 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
         appBar: AppBar(
           title: Text('${loan.loanId} • ${borrower?.fullName ?? ""}'),
           actions: [
+            IconButton(
+              tooltip: 'Export Loan Report CSV',
+              icon: const Icon(Icons.table_view_outlined),
+              onPressed: () => _exportLoanCsv(
+                borrower: borrower,
+                loan: loan,
+                schedule: visibleSchedule,
+              ),
+            ),
             if (borrower != null)
               IconButton(
                 tooltip: 'What-If Prepayment Simulator',
@@ -319,7 +386,9 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                       ],
                     ),
                   ),
-                _buildBalanceAndPieCard(loan),
+                _buildBalanceAndPieCard(loan, visibleSchedule),
+                const SizedBox(height: 10),
+                _buildUnderwritingStrip(borrower, loan),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
@@ -348,6 +417,15 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                         icon: const Icon(Icons.calculate, size: 18),
                         label: const Text('What-If Simulator'),
                       ),
+                    OutlinedButton.icon(
+                      onPressed: () => _exportLoanCsv(
+                        borrower: borrower,
+                        loan: loan,
+                        schedule: visibleSchedule,
+                      ),
+                      icon: const Icon(Icons.download, size: 18),
+                      label: const Text('Export CSV'),
+                    ),
                     if (borrower != null)
                       OutlinedButton.icon(
                         onPressed: () async {
@@ -567,84 +645,191 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     );
   }
 
-  Widget _buildBalanceAndPieCard(LoanModel loan) {
+  Widget _buildBalanceAndPieCard(
+    LoanModel loan,
+    List<InstallmentModel> schedule,
+  ) {
     final principalPaid = (loan.principalSanctioned - loan.principalOutstanding)
         .clamp(0.0, loan.principalSanctioned);
+    final totalScheduledInterest = schedule.fold<double>(
+      0.0,
+      (sum, row) => sum + row.interestDue,
+    );
+    final paidInstallments =
+        schedule.where((r) => r.status == InstallmentStatus.paid).length;
+    final totalInstallments =
+        loan.tenureInstallments > 0 ? loan.tenureInstallments : 1;
+    final tenureProgress =
+        (paidInstallments / totalInstallments).clamp(0.0, 1.0);
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              width: 110,
-              height: 110,
-              child: PieChart(
-                PieChartData(
-                  sectionsSpace: 2,
-                  centerSpaceRadius: 24,
-                  sections: [
-                    PieChartSectionData(
-                      value: principalPaid > 0 ? principalPaid : 1,
-                      color: Colors.green.shade600,
-                      title: '',
-                      radius: 26,
+            Row(
+              children: [
+                SizedBox(
+                  width: 112,
+                  height: 112,
+                  child: PieChart(
+                    PieChartData(
+                      sectionsSpace: 2,
+                      centerSpaceRadius: 24,
+                      sections: [
+                        PieChartSectionData(
+                          value: principalPaid > 0 ? principalPaid : 1,
+                          color: Colors.green.shade600,
+                          title: '',
+                          radius: 26,
+                        ),
+                        PieChartSectionData(
+                          value: loan.principalOutstanding > 0
+                              ? loan.principalOutstanding
+                              : 0.01,
+                          color: Colors.indigo.shade600,
+                          title: '',
+                          radius: 26,
+                        ),
+                        if (totalScheduledInterest > 0)
+                          PieChartSectionData(
+                            value: totalScheduledInterest,
+                            color: Colors.amber.shade700,
+                            title: '',
+                            radius: 26,
+                          ),
+                      ],
                     ),
-                    PieChartSectionData(
-                      value: loan.principalOutstanding > 0
-                          ? loan.principalOutstanding
-                          : 0.01,
-                      color: Colors.indigo.shade600,
-                      title: '',
-                      radius: 26,
-                    ),
-                    if (loan.interestOutstanding + loan.feesOutstanding > 0)
-                      PieChartSectionData(
-                        value: loan.interestOutstanding + loan.feesOutstanding,
-                        color: Colors.amber.shade700,
-                        title: '',
-                        radius: 26,
-                      ),
-                  ],
+                  ),
                 ),
-              ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total Outstanding: ${IndianFormatters.formatInr(loan.totalOutstanding)}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _legendRow(
+                        Colors.green.shade600,
+                        'Principal Paid: ${IndianFormatters.formatInr(principalPaid)}',
+                      ),
+                      _legendRow(
+                        Colors.indigo.shade600,
+                        'Principal Bal: ${IndianFormatters.formatInr(loan.principalOutstanding)}',
+                      ),
+                      _legendRow(
+                        Colors.amber.shade700,
+                        'Total Interest: ${IndianFormatters.formatInr(totalScheduledInterest)}',
+                      ),
+                      if (loan.feesOutstanding > 0)
+                        Text(
+                          'Fees/Penalties: ${IndianFormatters.formatInr(loan.feesOutstanding)}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      const SizedBox(height: 6),
+                      Chip(
+                        label: Text(
+                          '${loan.status.label} • ${loan.dpd} DPD (${loan.agingBucket.label})',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Total Outstanding: ${IndianFormatters.formatInr(loan.totalOutstanding)}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text('Principal Paid: ${IndianFormatters.formatInr(principalPaid)}'),
-                  Text(
-                    'Principal Balance: ${IndianFormatters.formatInr(loan.principalOutstanding)}',
-                  ),
-                  Text(
-                    'Interest Balance: ${IndianFormatters.formatInr(loan.interestOutstanding)}',
-                  ),
-                  Text(
-                    'Fees/Penalties: ${IndianFormatters.formatInr(loan.feesOutstanding)}',
-                  ),
-                  const SizedBox(height: 6),
-                  Chip(
-                    label: Text(
-                      '${loan.status.label} • ${loan.dpd} DPD (${loan.agingBucket.label})',
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ),
-                ],
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Repayment Tenure Progress',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  '$paidInstallments / ${loan.tenureInstallments} Installments Paid (${(tenureProgress * 100).toStringAsFixed(0)}%)',
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: tenureProgress,
+                minHeight: 8,
+                backgroundColor: Colors.grey.shade200,
+                color: Colors.indigo.shade600,
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _legendRow(Color dotColor, String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        children: [
+          Container(
+            width: 9,
+            height: 9,
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUnderwritingStrip(BorrowerModel? borrower, LoanModel loan) {
+    final badges = <String>[
+      if (borrower?.creditScore != null) 'Score: ${borrower!.creditScore}',
+      if (loan.ltvPct != null) 'LTV: ${loan.ltvPct!.toStringAsFixed(0)}%',
+      if (loan.foirPct != null) 'FOIR: ${loan.foirPct!.toStringAsFixed(0)}%',
+      if (borrower?.cersaiId != null) 'CERSAI: ${borrower!.cersaiId}',
+      if (loan.assetClassification != null) 'Asset: ${loan.assetClassification}',
+      if (borrower?.branch != null)
+        'Branch: ${borrower!.branch}${borrower.pincode != null ? " (${borrower.pincode})" : ""}',
+    ];
+    if (badges.isEmpty) return const SizedBox.shrink();
+
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: badges
+          .map(
+            (text) => Chip(
+              visualDensity: VisualDensity.compact,
+              backgroundColor: Colors.indigo.shade50,
+              side: BorderSide(color: Colors.indigo.shade100),
+              label: Text(
+                text,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.indigo.shade900,
+                ),
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -672,12 +857,18 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
             ),
             const SizedBox(height: 6),
             Text('ID: ${borrower.borrowerId} • Mobile: ${borrower.mobilePrimary}'),
+            if (borrower.coApplicantName != null)
+              Text('Co-Applicant: ${borrower.coApplicantName}'),
             if (borrower.businessName != null)
               Text('Business: ${borrower.businessName}'),
             Text(
               'PAN: ${borrower.panNumber.isEmpty ? "N/A" : borrower.panNumber} | '
               'Aadhaar: ${borrower.aadhaarMasked.isEmpty ? "N/A" : borrower.aadhaarMasked}',
             ),
+            if (borrower.ckycId != null || borrower.cersaiId != null)
+              Text(
+                'CKYC: ${borrower.ckycId ?? "N/A"} | CERSAI: ${borrower.cersaiId ?? "N/A"}',
+              ),
             if (borrower.gstin != null) Text('GSTIN: ${borrower.gstin}'),
             if (borrower.bankAccountNo != null)
               Text('Bank A/C: ${borrower.bankAccountNo} (IFSC: ${borrower.bankIfsc ?? "-"})'),

@@ -1,11 +1,11 @@
-import '../utils/indian_formatters.dart';
+﻿import '../utils/indian_formatters.dart';
 import 'loan_product_model.dart';
 
 enum AgingBucket {
   current('CURRENT', 'Current (0 DPD)'),
-  dpd1To30('DPD_1_30', '1–30 DPD'),
-  dpd31To60('DPD_31_60', '31–60 DPD'),
-  dpd61To90('DPD_61_90', '61–90 DPD'),
+  dpd1To30('DPD_1_30', '1-30 DPD'),
+  dpd31To60('DPD_31_60', '31-60 DPD'),
+  dpd61To90('DPD_61_90', '61-90 DPD'),
   dpd90Plus('DPD_90_PLUS', '90+ DPD (NPA)');
 
   const AgingBucket(this.wireValue, this.label);
@@ -78,6 +78,11 @@ class LoanModel {
     this.agingBucket = AgingBucket.current,
     this.status = LoanStatus.active,
     this.earlyWarningFlag = false,
+    this.monthsOnBooks,
+    this.ltvPct,
+    this.foirPct,
+    this.assetClassification,
+    this.lastPaidDate,
   });
 
   final String loanId;
@@ -105,6 +110,11 @@ class LoanModel {
   final AgingBucket agingBucket;
   final LoanStatus status;
   final bool earlyWarningFlag;
+  final int? monthsOnBooks;
+  final double? ltvPct;
+  final double? foirPct;
+  final String? assetClassification;
+  final DateTime? lastPaidDate;
 
   double get totalOutstanding => IndianFormatters.roundPaise(
         principalOutstanding + interestOutstanding + feesOutstanding,
@@ -141,6 +151,11 @@ class LoanModel {
     AgingBucket? agingBucket,
     LoanStatus? status,
     bool? earlyWarningFlag,
+    int? monthsOnBooks,
+    double? ltvPct,
+    double? foirPct,
+    String? assetClassification,
+    DateTime? lastPaidDate,
   }) {
     return LoanModel(
       loanId: loanId ?? this.loanId,
@@ -168,6 +183,11 @@ class LoanModel {
       agingBucket: agingBucket ?? this.agingBucket,
       status: status ?? this.status,
       earlyWarningFlag: earlyWarningFlag ?? this.earlyWarningFlag,
+      monthsOnBooks: monthsOnBooks ?? this.monthsOnBooks,
+      ltvPct: ltvPct ?? this.ltvPct,
+      foirPct: foirPct ?? this.foirPct,
+      assetClassification: assetClassification ?? this.assetClassification,
+      lastPaidDate: lastPaidDate ?? this.lastPaidDate,
     );
   }
 
@@ -201,6 +221,13 @@ class LoanModel {
       agingBucket: AgingBucket.fromString(map['aging_bucket'] as String?),
       status: LoanStatus.fromString(map['status'] as String?),
       earlyWarningFlag: map['early_warning_flag'] as bool? ?? false,
+      monthsOnBooks: (map['months_on_books'] as num?)?.toInt(),
+      ltvPct: (map['ltv_pct'] as num?)?.toDouble(),
+      foirPct: (map['foir_pct'] as num?)?.toDouble(),
+      assetClassification: map['asset_classification'] as String?,
+      lastPaidDate: map['last_paid_date'] != null
+          ? IndianFormatters.parseDate(map['last_paid_date'])
+          : null,
     );
   }
 
@@ -230,5 +257,10 @@ class LoanModel {
         'aging_bucket': agingBucket.wireValue,
         'status': status.wireValue,
         'early_warning_flag': earlyWarningFlag,
+        'months_on_books': monthsOnBooks,
+        'ltv_pct': ltvPct,
+        'foir_pct': foirPct,
+        'asset_classification': assetClassification,
+        'last_paid_date': lastPaidDate?.toIso8601String(),
       };
 }

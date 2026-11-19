@@ -1,15 +1,21 @@
-import '../utils/indian_formatters.dart';
+﻿import '../utils/indian_formatters.dart';
 
-/// Table 1: `borrowers` — Customer master, KYC, and geo-coordinates.
+/// Table 1: `borrowers` — Customer master & verified field geo-coordinates.
 class BorrowerModel {
   const BorrowerModel({
     required this.borrowerId,
     required this.fullName,
+    this.coApplicantName,
     required this.mobilePrimary,
     this.mobileAlternate,
     this.businessName,
     this.panNumber = '',
     this.aadhaarMasked = '',
+    this.ckycId,
+    this.cersaiId,
+    this.creditScore,
+    this.branch,
+    this.pincode,
     this.gstin,
     this.bankAccountNo,
     this.bankIfsc,
@@ -26,11 +32,17 @@ class BorrowerModel {
 
   final String borrowerId;
   final String fullName;
+  final String? coApplicantName;
   final String mobilePrimary;
   final String? mobileAlternate;
   final String? businessName;
   final String panNumber;
   final String aadhaarMasked;
+  final String? ckycId;
+  final String? cersaiId;
+  final int? creditScore;
+  final String? branch;
+  final String? pincode;
   final String? gstin;
   final String? bankAccountNo;
   final String? bankIfsc;
@@ -55,11 +67,17 @@ class BorrowerModel {
   BorrowerModel copyWith({
     String? borrowerId,
     String? fullName,
+    String? coApplicantName,
     String? mobilePrimary,
     String? mobileAlternate,
     String? businessName,
     String? panNumber,
     String? aadhaarMasked,
+    String? ckycId,
+    String? cersaiId,
+    int? creditScore,
+    String? branch,
+    String? pincode,
     String? gstin,
     String? bankAccountNo,
     String? bankIfsc,
@@ -76,11 +94,17 @@ class BorrowerModel {
     return BorrowerModel(
       borrowerId: borrowerId ?? this.borrowerId,
       fullName: fullName ?? this.fullName,
+      coApplicantName: coApplicantName ?? this.coApplicantName,
       mobilePrimary: mobilePrimary ?? this.mobilePrimary,
       mobileAlternate: mobileAlternate ?? this.mobileAlternate,
       businessName: businessName ?? this.businessName,
       panNumber: panNumber ?? this.panNumber,
       aadhaarMasked: aadhaarMasked ?? this.aadhaarMasked,
+      ckycId: ckycId ?? this.ckycId,
+      cersaiId: cersaiId ?? this.cersaiId,
+      creditScore: creditScore ?? this.creditScore,
+      branch: branch ?? this.branch,
+      pincode: pincode ?? this.pincode,
       gstin: gstin ?? this.gstin,
       bankAccountNo: bankAccountNo ?? this.bankAccountNo,
       bankIfsc: bankIfsc ?? this.bankIfsc,
@@ -100,11 +124,17 @@ class BorrowerModel {
     return BorrowerModel(
       borrowerId: id ?? (map['borrower_id'] as String? ?? ''),
       fullName: map['full_name'] as String? ?? '',
+      coApplicantName: map['co_applicant_name'] as String?,
       mobilePrimary: map['mobile_primary'] as String? ?? '',
       mobileAlternate: map['mobile_alternate'] as String?,
       businessName: map['business_name'] as String?,
       panNumber: map['pan_number'] as String? ?? '',
       aadhaarMasked: map['aadhaar_masked'] as String? ?? '',
+      ckycId: map['ckyc_id'] as String?,
+      cersaiId: map['cersai_id'] as String?,
+      creditScore: (map['credit_score'] as num?)?.toInt(),
+      branch: map['branch'] as String?,
+      pincode: map['pincode'] as String?,
       gstin: map['gstin'] as String?,
       bankAccountNo: map['bank_account_no'] as String?,
       bankIfsc: map['bank_ifsc'] as String?,
@@ -125,11 +155,17 @@ class BorrowerModel {
   Map<String, dynamic> toMap() => {
         'borrower_id': borrowerId,
         'full_name': fullName,
+        'co_applicant_name': coApplicantName,
         'mobile_primary': mobilePrimary,
         'mobile_alternate': mobileAlternate,
         'business_name': businessName,
         'pan_number': panNumber,
         'aadhaar_masked': aadhaarMasked,
+        'ckyc_id': ckycId,
+        'cersai_id': cersaiId,
+        'credit_score': creditScore,
+        'branch': branch,
+        'pincode': pincode,
         'gstin': gstin,
         'bank_account_no': bankAccountNo,
         'bank_ifsc': bankIfsc,
