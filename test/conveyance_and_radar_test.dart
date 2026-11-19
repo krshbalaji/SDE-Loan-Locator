@@ -4,30 +4,37 @@ import 'package:loan_locator_app/engines/geo_filter_engine.dart';
 import 'package:loan_locator_app/models/borrower_model.dart';
 import 'package:loan_locator_app/models/collection_log_model.dart';
 import 'package:loan_locator_app/models/loan_model.dart';
+import 'package:loan_locator_app/models/loan_product_model.dart';
 import 'package:loan_locator_app/models/transaction_model.dart';
 
 void main() {
   test('ConveyanceEngine computes verified road km & reimbursement automatically', () {
+    final day = DateTime(2026, 11, 19, 10, 0);
     final borrowers = [
-      const BorrowerModel(
+      BorrowerModel(
         borrowerId: 'B1',
         fullName: 'West Masi Borrower',
         mobilePrimary: '9842100001',
         addressText: 'West Masi St, Madurai',
         latitude: 9.9195,
         longitude: 78.1193,
+        assignedAgentId: 'AGT1',
+        createdAt: day,
+        updatedAt: day,
       ),
-      const BorrowerModel(
+      BorrowerModel(
         borrowerId: 'B2',
         fullName: 'Anna Nagar Borrower',
         mobilePrimary: '9842100002',
         addressText: 'Anna Nagar, Madurai',
         latitude: 9.9225,
         longitude: 78.1456,
+        assignedAgentId: 'AGT1',
+        createdAt: day,
+        updatedAt: day,
       ),
     ];
 
-    final day = DateTime(2026, 11, 19, 10, 0);
     final logs = [
       CollectionLogModel(
         logId: 'L1',
@@ -77,31 +84,41 @@ void main() {
     expect(res.first.collectionPerKmInr, greaterThan(3000.0));
   });
 
-  test('Customer-anchored radius scales from 5 km urban to 50 km district', () {
+  test('Customer-anchored radius scales from 5 km urban to 75 km district', () {
+    final day = DateTime(2026, 1, 1);
     final borrowers = [
-      const BorrowerModel(
+      BorrowerModel(
         borrowerId: 'ANCHOR',
         fullName: 'Madurai Anchor',
         mobilePrimary: '9842100001',
         addressText: 'Madurai',
         latitude: 9.9195,
         longitude: 78.1193,
+        assignedAgentId: 'AGT1',
+        createdAt: day,
+        updatedAt: day,
       ),
-      const BorrowerModel(
+      BorrowerModel(
         borrowerId: 'NEAR',
         fullName: 'Anna Nagar',
         mobilePrimary: '9842100002',
         addressText: 'Madurai',
         latitude: 9.9225,
         longitude: 78.1456,
+        assignedAgentId: 'AGT1',
+        createdAt: day,
+        updatedAt: day,
       ),
-      const BorrowerModel(
+      BorrowerModel(
         borrowerId: 'SIVAKASI',
         fullName: 'Sivakasi Unit',
         mobilePrimary: '9842100003',
         addressText: 'Sivakasi',
         latitude: 9.4533,
         longitude: 77.8024,
+        assignedAgentId: 'AGT1',
+        createdAt: day,
+        updatedAt: day,
       ),
     ];
 
@@ -114,11 +131,16 @@ void main() {
             productId: 'P1',
             assignedAgentId: 'AGT1',
             principalSanctioned: 100000,
-            annualInterestRate: 18,
+            interestMethod: InterestMethod.reducingBalance,
+            interestRateAnnual: 18.0,
             tenureInstallments: 12,
             emiAmount: 9168,
-            disbursementDate: DateTime(2026, 1, 1),
+            processingFeeAmount: 2000,
+            gstAmount: 360,
+            netDisbursedAmount: 97640,
+            disbursementDate: day,
             firstDueDate: DateTime(2026, 2, 1),
+            maturityDate: DateTime(2027, 1, 1),
             principalOutstanding: 80000,
           ),
         )
