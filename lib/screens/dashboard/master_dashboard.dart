@@ -14,7 +14,7 @@ import '../loans/loan_list_screen.dart';
 import '../map/field_locator_map_screen.dart';
 
 /// Master & Admin Command Center with Portfolio KPIs, PAR > 30 %, Aging Chart,
-/// Agent Collection Efficiency Leaderboard, and unified navigation.
+/// Agent Collection Efficiency Leaderboard, and full Product Template CRUD.
 class MasterDashboard extends StatefulWidget {
   const MasterDashboard({super.key});
 
@@ -25,19 +25,45 @@ class MasterDashboard extends StatefulWidget {
 class _MasterDashboardState extends State<MasterDashboard> {
   int _selectedIndex = 0;
 
-  Future<void> _showCreateProductDialog(LoanPortfolioProvider portfolio) async {
-    final nameCtrl = TextEditingController();
-    final rateCtrl = TextEditingController(text: '20.0');
-    final tenureCtrl = TextEditingController(text: '24');
-    final feeCtrl = TextEditingController(text: '2.0');
-    var method = InterestMethod.reducingBalance;
-    var freq = RepaymentFrequency.monthly;
+  Future<void> _showProductEditorDialog(
+    LoanPortfolioProvider portfolio, {
+    LoanProductModel? existing,
+  }) async {
+    final nameCtrl = TextEditingController(text: existing?.productName ?? '');
+    final rateCtrl = TextEditingController(
+      text: (existing?.annualInterestRate ?? 20.0).toString(),
+    );
+    final tenureCtrl = TextEditingController(
+      text: (existing?.maxTenureInstallments ?? 24).toString(),
+    );
+    final feeCtrl = TextEditingController(
+      text: (existing?.processingFeePct ?? 2.0).toString(),
+    );
+    final gstCtrl = TextEditingController(
+      text: (existing?.gstRatePct ?? 18.0).toString(),
+    );
+    final graceCtrl = TextEditingController(
+      text: (existing?.gracePeriodDays ?? 3).toString(),
+    );
+    final lateValCtrl = TextEditingController(
+      text: (existing?.lateFeeValue ?? 2.0).toString(),
+    );
+    final riskDpdCtrl = TextEditingController(
+      text: (existing?.atRiskDpdThreshold ?? 30).toString(),
+    );
+    var method = existing?.interestMethod ?? InterestMethod.reducingBalance;
+    var freq = existing?.repaymentFrequency ?? RepaymentFrequency.monthly;
+    var lateType = existing?.lateFeeType ?? LateFeeType.percentOverdue;
 
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setStateDialog) => AlertDialog(
-          title: const Text('Create Loan Product Template'),
+          title: Text(
+            existing == null
+                ? 'Create Loan Product Template'
+                : 'Edit Product: ${existing.productName}',
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -85,7 +111,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
                     Expanded(
                       child: TextField(
                         controller: rateCtrl,
-                        keyboardType: TextInputType.number,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         decoration: const InputDecoration(
                           labelText: 'Annual Rate (%)',
                           border: OutlineInputBorder(),
@@ -106,13 +132,94 @@ class _MasterDashboardState extends State<MasterDashboard> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: feeCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Processing Fee % (+18% GST)',
-                    border: OutlineInputBorder(),
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: feeCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(
+                          labelText: 'Proc. Fee (%)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: gstCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(
+                          labelText: 'GST Rate (%)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: graceCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Grace Days',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: riskDpdCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'At-Risk DPD',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: DropdownButtonFormField<LateFeeType>(
+                        value: lateType,
+                        decoration: const InputDecoration(
+                          labelText: 'Late Fee Type',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: LateFeeType.values
+                            .map((t) => DropdownMenuItem(
+                                  value: t,
+                                  child: Text(t.label, overflow: TextOverflow.ellipsis),
+                                ))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) setStateDialog(() => lateType = v);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 2,
+                      child: TextField(
+                        controller: lateValCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          labelText: lateType == LateFeeType.flatInr
+                              ? 'Fee (INR)'
+                              : 'Fee (%)',
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -126,18 +233,25 @@ class _MasterDashboardState extends State<MasterDashboard> {
               onPressed: () async {
                 if (nameCtrl.text.trim().isEmpty) return;
                 final product = LoanProductModel(
-                  productId: 'PROD-${DateTime.now().millisecondsSinceEpoch % 10000}',
+                  productId: existing?.productId ??
+                      'PROD-${DateTime.now().millisecondsSinceEpoch % 10000}',
                   productName: nameCtrl.text.trim(),
                   interestMethod: method,
                   annualInterestRate: double.tryParse(rateCtrl.text) ?? 20.0,
                   repaymentFrequency: freq,
                   maxTenureInstallments: int.tryParse(tenureCtrl.text) ?? 24,
                   processingFeePct: double.tryParse(feeCtrl.text) ?? 2.0,
+                  gstRatePct: double.tryParse(gstCtrl.text) ?? 18.0,
+                  gracePeriodDays: int.tryParse(graceCtrl.text) ?? 3,
+                  lateFeeType: lateType,
+                  lateFeeValue: double.tryParse(lateValCtrl.text) ?? 2.0,
+                  atRiskDpdThreshold: int.tryParse(riskDpdCtrl.text) ?? 30,
+                  isActive: existing?.isActive ?? true,
                 );
                 await portfolio.saveProduct(product);
                 if (ctx.mounted) Navigator.pop(ctx);
               },
-              child: const Text('Save Template'),
+              child: Text(existing == null ? 'Save Template' : 'Update Template'),
             ),
           ],
         ),
@@ -291,12 +405,14 @@ class _MasterDashboardState extends State<MasterDashboard> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Agent Collection Efficiency Leaderboard',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                    Expanded(
+                      child: Text(
+                        'Agent Collection Efficiency Leaderboard',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
                     ),
                     OutlinedButton.icon(
                       onPressed: () async {
@@ -365,7 +481,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
                     ),
                     if (auth.currentUser?.isMaster == true)
                       FilledButton.tonalIcon(
-                        onPressed: () => _showCreateProductDialog(portfolio),
+                        onPressed: () => _showProductEditorDialog(portfolio),
                         icon: const Icon(Icons.add, size: 16),
                         label: const Text('Add Product'),
                       ),
@@ -375,6 +491,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
                 for (final p in portfolio.products)
                   ListTile(
                     dense: true,
+                    contentPadding: EdgeInsets.zero,
                     title: Text(
                       p.productName,
                       style: const TextStyle(fontWeight: FontWeight.w600),
@@ -382,8 +499,20 @@ class _MasterDashboardState extends State<MasterDashboard> {
                     subtitle: Text(
                       '${p.annualInterestRate}% p.a. (${p.interestMethod.label}) • '
                       '${p.repaymentFrequency.label} (max ${p.maxTenureInstallments}) • '
-                      'Fee ${p.processingFeePct}% + ${p.gstRatePct}% GST',
+                      'Fee ${p.processingFeePct}% + ${p.gstRatePct}% GST • '
+                      'Grace ${p.gracePeriodDays}d • Late ${p.lateFeeType == LateFeeType.flatInr ? "₹${p.lateFeeValue.toStringAsFixed(0)}" : "${p.lateFeeValue}%"} • '
+                      'Risk ${p.atRiskDpdThreshold}d',
                     ),
+                    trailing: auth.currentUser?.isMaster == true
+                        ? IconButton(
+                            tooltip: 'Edit Product Template',
+                            icon: const Icon(Icons.edit_outlined, size: 20),
+                            onPressed: () => _showProductEditorDialog(
+                              portfolio,
+                              existing: p,
+                            ),
+                          )
+                        : null,
                   ),
               ],
             ),

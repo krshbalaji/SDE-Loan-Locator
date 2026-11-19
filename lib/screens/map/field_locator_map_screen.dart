@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
@@ -32,7 +31,7 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
   AgingBucket? _bucketFilter;
   bool _ptpDueTodayOnly = false;
   bool _optimizeRoute = true;
-  bool _showMapView = !kIsWeb; // Route List works reliably on Web/Windows even without Maps API key
+  bool _showMapView = false;
   String _searchQuery = '';
   String? _selectedLoanId;
 
@@ -345,3 +344,4 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
     );
   }
 }
+
