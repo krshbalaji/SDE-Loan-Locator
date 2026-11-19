@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../engines/conveyance_engine.dart';
 import '../../engines/delinquency_engine.dart';
 import '../../models/loan_product_model.dart';
 import '../../services/auth_service.dart';
@@ -24,6 +25,7 @@ class MasterDashboard extends StatefulWidget {
 
 class _MasterDashboardState extends State<MasterDashboard> {
   int _selectedIndex = 0;
+  double _conveyanceRatePerKm = ConveyanceEngine.defaultRatePerKmInr;
 
   Future<void> _showProductEditorDialog(
     LoanPortfolioProvider portfolio, {
@@ -353,6 +355,16 @@ class _MasterDashboardState extends State<MasterDashboard> {
     LoanPortfolioProvider portfolio,
     AuthService auth,
   ) {
+    final now = DateTime.now();
+    final conveyanceList = ConveyanceEngine.computePeriodConveyance(
+      logs: portfolio.collectionLogs,
+      transactions: portfolio.transactions,
+      borrowers: portfolio.borrowers,
+      agentNames: auth.knownAgentNames,
+      fromDate: DateTime(now.year, now.month, 1),
+      toDate: now,
+      ratePerKmInr: _conveyanceRatePerKm,
+    );
     final kpi = DelinquencyEngine.computePortfolioKpis(
       loans: portfolio.loans,
       transactions: portfolio.transactions,
@@ -472,6 +484,68 @@ class _MasterDashboardState extends State<MasterDashboard> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    const Expanded(
+                      child: Text(
+                        'Field Travel & Local Conveyance (MTD)',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    ActionChip(
+                      avatar: const Icon(Icons.two_wheeler, size: 16),
+                      label: Text('₹/km'),
+                      onPressed: () {
+                        setState(() {
+                          _conveyanceRatePerKm = _conveyanceRatePerKm >= 8.0
+                              ? 3.5
+                              : _conveyanceRatePerKm + 1.0;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                for (final c in conveyanceList)
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.teal.shade50,
+                      child: Icon(Icons.route, color: Colors.teal.shade800, size: 18),
+                    ),
+                    title: Text(
+                      c.agentName,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      ' km across d • '
+                      ' verified visits • '
+                      'Yield /km',
+                    ),
+                    trailing: Text(
+                      IndianFormatters.formatInr(c.reimbursementInr, showDecimals: false),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.teal.shade800,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
                     Text(
                       'Loan Product Templates (${portfolio.products.length})',
                       style: Theme.of(context)
@@ -555,3 +629,4 @@ class _MasterDashboardState extends State<MasterDashboard> {
     );
   }
 }
+

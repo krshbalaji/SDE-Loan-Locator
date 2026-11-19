@@ -12,6 +12,7 @@ class BorrowerMapCard extends StatelessWidget {
     required this.onOpenLoanDetail,
     required this.onLogPtp,
     required this.onCheckIn,
+    this.onOpenNearbyRadar,
     this.routeStopNumber,
   });
 
@@ -19,6 +20,7 @@ class BorrowerMapCard extends StatelessWidget {
   final VoidCallback onOpenLoanDetail;
   final VoidCallback onLogPtp;
   final VoidCallback onCheckIn;
+  final VoidCallback? onOpenNearbyRadar;
   final int? routeStopNumber;
 
   Color _healthColor() {
@@ -145,6 +147,17 @@ class BorrowerMapCard extends StatelessWidget {
                   icon: const Icon(Icons.navigation, size: 16),
                   label: const Text('Navigate'),
                 ),
+                if (onOpenNearbyRadar != null)
+                  FilledButton.tonalIcon(
+                    onPressed: onOpenNearbyRadar,
+                    icon: const Icon(Icons.radar, size: 16),
+                    label: const Text('Nearby Radar'),
+                  ),
+                OutlinedButton.icon(
+                  onPressed: onCheckIn,
+                  icon: const Icon(Icons.my_location, size: 16),
+                  label: const Text('Check-In'),
+                ),
                 OutlinedButton.icon(
                   onPressed: () =>
                       LocationService.launchPhoneCall(borrower.mobilePrimary),
@@ -161,11 +174,6 @@ class BorrowerMapCard extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.chat, size: 16),
                   label: const Text('WhatsApp'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: onCheckIn,
-                  icon: const Icon(Icons.my_location, size: 16),
-                  label: const Text('Check-In'),
                 ),
                 OutlinedButton.icon(
                   onPressed: onLogPtp,

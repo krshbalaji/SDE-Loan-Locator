@@ -3,17 +3,19 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../../engines/geo_filter_engine.dart';
+import '../../models/collection_log_model.dart';
 import '../../models/loan_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_loan_service.dart';
 import '../../services/location_service.dart';
 import '../../widgets/borrower_map_card.dart';
+import '../../widgets/customer_nearby_radar_sheet.dart';
 import '../../widgets/ptp_log_bottom_sheet.dart';
 import '../loans/loan_detail_screen.dart';
 
-/// Upgraded Geo-Map & Field Route Locator:
-/// Green/Amber/Red health pins, 50 km Haversine radius, Agent / Bucket / PTP Due Today filters,
-/// greedy route ordering, and on-site GPS check-in verification.
+/// Terrain-Adaptive Geo-Map & Field Route Locator (2 km – 100 km):
+/// Supports dense city clusters (2–5 km) and wide district/highway belts (25–100 km),
+/// plus automatic Customer-Anchored Nearby Pending Radar upon on-site Check-In.
 class FieldLocatorMapScreen extends StatefulWidget {
   const FieldLocatorMapScreen({super.key, this.lockedAgentId});
 
@@ -26,7 +28,7 @@ class FieldLocatorMapScreen extends StatefulWidget {
 class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
   double _originLat = LocationService.defaultLat;
   double _originLng = LocationService.defaultLng;
-  double _radiusKm = 50.0;
+  double _radiusKm = 15.0;
   String? _agentFilter;
   AgingBucket? _bucketFilter;
   bool _ptpDueTodayOnly = false;
@@ -64,6 +66,7 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
 
   Future<void> _performGeoCheckIn(
     LoanPortfolioProvider portfolio,
+    AuthService auth,
     GeoBorrowerPin pin,
   ) async {
     final loc = await LocationService.getCurrentLocation();
@@ -80,15 +83,44 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
       longitude: pin.borrower.longitude,
     );
 
+    // Log GPS-stamped Field Visit for automatic travel km & Local Conveyance (TA/DA) audit
+    final now = DateTime.now();
+    await portfolio.logCollectionActivity(
+      CollectionLogModel(
+        logId: 'CHK-${now.millisecondsSinceEpoch}',
+        loanId: pin.primaryLoan.loanId,
+        borrowerId: pin.borrower.borrowerId,
+        agentId: auth.currentUser?.uid ?? pin.primaryLoan.assignedAgentId,
+        actionType: CollectionActionType.fieldVisit,
+        disposition: CollectionDisposition.customerUnavailable,
+        visitLat: loc.latitude,
+        visitLng: loc.longitude,
+        notes: check.isVerified
+            ? 'On-site GPS check-in verified (${check.distanceMeters.toStringAsFixed(0)}m from property).'
+            : 'Field check-in logged (${(check.distanceMeters / 1000).toStringAsFixed(2)} km from property).',
+        nextFollowupAt: now.add(const Duration(days: 1)),
+        createdAt: now,
+      ),
+    );
+
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           check.isVerified
-              ? 'On-site check-in verified (${check.distanceMeters.toStringAsFixed(0)}m from pin)!'
-              : 'Pin stamped (${(check.distanceMeters / 1000).toStringAsFixed(2)} km from current GPS).',
+              ? 'On-site check-in verified (${check.distanceMeters.toStringAsFixed(0)}m) • Travel km logged!'
+              : 'Check-in stamped (${(check.distanceMeters / 1000).toStringAsFixed(2)} km from pin).',
         ),
       ),
+    );
+
+    // Immediately launch Customer-Anchored Nearby Pending Radar
+    await CustomerNearbyRadarSheet.show(
+      context,
+      anchorBorrower: pin.borrower,
+      anchorLoan: pin.primaryLoan,
+      initialRadiusKm: _radiusKm <= 15 ? 5.0 : _radiusKm,
+      agentIdFilter: widget.lockedAgentId,
     );
   }
 
@@ -139,7 +171,7 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
           child: Row(
             children: [
               Expanded(
@@ -174,33 +206,57 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
             ],
           ),
         ),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           child: Row(
             children: [
-              ActionChip(
-                avatar: const Icon(Icons.radar, size: 16),
-                label: Text('Radius: ${_radiusKm.round()} km'),
-                onPressed: () {
-                  setState(() {
-                    _radiusKm = _radiusKm >= 100
-                        ? 10
-                        : _radiusKm == 50
-                            ? 100
-                            : 50;
-                  });
-                },
+              const Icon(Icons.radar, size: 16, color: Colors.indigo),
+              const SizedBox(width: 4),
+              Text(
+                'Territory: ${_radiusKm.round()} km',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.indigo,
+                ),
               ),
-              const SizedBox(width: 6),
+              Expanded(
+                child: Slider(
+                  value: _radiusKm,
+                  min: 2,
+                  max: 100,
+                  divisions: 49,
+                  label: '${_radiusKm.round()} km',
+                  onChanged: (v) => setState(() => _radiusKm = v),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          child: Row(
+            children: [
+              for (final preset in const [2.0, 5.0, 15.0, 50.0, 100.0]) ...[
+                ChoiceChip(
+                  label: Text('${preset.round()} km',
+                      style: const TextStyle(fontSize: 11)),
+                  selected: (_radiusKm - preset).abs() < 0.5,
+                  onSelected: (_) => setState(() => _radiusKm = preset),
+                ),
+                const SizedBox(width: 4),
+              ],
+              const SizedBox(width: 4),
               FilterChip(
-                label: const Text('PTP Due Today'),
+                label: const Text('PTP Due Today',
+                    style: TextStyle(fontSize: 11)),
                 selected: _ptpDueTodayOnly,
                 onSelected: (v) => setState(() => _ptpDueTodayOnly = v),
               ),
               const SizedBox(width: 6),
               FilterChip(
-                label: const Text('Auto-Route'),
+                label: const Text('Auto-Route', style: TextStyle(fontSize: 11)),
                 selected: _optimizeRoute,
                 onSelected: (v) => setState(() => _optimizeRoute = v),
               ),
@@ -227,7 +283,7 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
               ],
               for (final bucket in AgingBucket.values) ...[
                 FilterChip(
-                  label: Text(bucket.label),
+                  label: Text(bucket.label, style: const TextStyle(fontSize: 11)),
                   selected: _bucketFilter == bucket,
                   onSelected: (sel) =>
                       setState(() => _bucketFilter = sel ? bucket : null),
@@ -275,6 +331,14 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
                         if (selectedPin != null)
                           BorrowerMapCard(
                             pin: selectedPin,
+                            onOpenNearbyRadar: () =>
+                                CustomerNearbyRadarSheet.show(
+                              context,
+                              anchorBorrower: selectedPin!.borrower,
+                              anchorLoan: selectedPin.primaryLoan,
+                              initialRadiusKm: _radiusKm <= 15 ? 5.0 : _radiusKm,
+                              agentIdFilter: widget.lockedAgentId,
+                            ),
                             onOpenLoanDetail: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -291,8 +355,11 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
                                   selectedPin.primaryLoan.assignedAgentId,
                               onSave: portfolio.logCollectionActivity,
                             ),
-                            onCheckIn: () =>
-                                _performGeoCheckIn(portfolio, selectedPin!),
+                            onCheckIn: () => _performGeoCheckIn(
+                              portfolio,
+                              auth,
+                              selectedPin!,
+                            ),
                           ),
                       ],
                     )
@@ -304,6 +371,14 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
                         return BorrowerMapCard(
                           pin: pin,
                           routeStopNumber: _optimizeRoute ? idx + 1 : null,
+                          onOpenNearbyRadar: () =>
+                              CustomerNearbyRadarSheet.show(
+                            context,
+                            anchorBorrower: pin.borrower,
+                            anchorLoan: pin.primaryLoan,
+                            initialRadiusKm: _radiusKm <= 15 ? 5.0 : _radiusKm,
+                            agentIdFilter: widget.lockedAgentId,
+                          ),
                           onOpenLoanDetail: () => Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -320,7 +395,8 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
                                 pin.primaryLoan.assignedAgentId,
                             onSave: portfolio.logCollectionActivity,
                           ),
-                          onCheckIn: () => _performGeoCheckIn(portfolio, pin),
+                          onCheckIn: () =>
+                              _performGeoCheckIn(portfolio, auth, pin),
                         );
                       },
                     ),
@@ -344,4 +420,3 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
     );
   }
 }
-
