@@ -7,6 +7,7 @@ import '../../models/collection_log_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_loan_service.dart';
 import '../../utils/indian_formatters.dart';
+import '../../utils/omni_search.dart';
 import '../collections/collections_queue_screen.dart';
 import '../loans/loan_list_screen.dart';
 import '../map/field_locator_map_screen.dart';
@@ -21,6 +22,7 @@ class AgentHomeScreen extends StatefulWidget {
 }
 
 class _AgentHomeScreenState extends State<AgentHomeScreen> {
+  CollectionCategory? _selectedCategory;
   int _selectedIndex = 0;
 
   @override
@@ -223,7 +225,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
         ],
       ),
       FieldLocatorMapScreen(lockedAgentId: user.uid),
-      CollectionsQueueScreen(agentIdFilter: user.uid),
+      CollectionsQueueScreen(agentIdFilter: user.uid, initialCategory: _selectedCategory),
       LoanListScreen(agentIdFilter: user.uid),
     ];
 
@@ -268,3 +270,4 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
     );
   }
 }
+

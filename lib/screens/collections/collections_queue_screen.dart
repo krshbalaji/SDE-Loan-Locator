@@ -10,18 +10,43 @@ import '../../services/auth_service.dart';
 import '../../services/firestore_loan_service.dart';
 import '../../services/location_service.dart';
 import '../../utils/indian_formatters.dart';
+import '../../utils/omni_search.dart';
 import '../../widgets/ptp_log_bottom_sheet.dart';
 import '../loans/loan_detail_screen.dart';
 
-/// Priority-ordered Collections Queue:
-/// `early_warning_flag` -> `Broken PTP` -> `DPD descending` -> `Outstanding descending`.
-class CollectionsQueueScreen extends StatelessWidget {
+/// Priority-ordered Collections Queue with Omni-Search and Regular / DPD / NPA bucket filters.
+class CollectionsQueueScreen extends StatefulWidget {
   const CollectionsQueueScreen({
     super.key,
     this.agentIdFilter,
+    this.initialCategory,
   });
 
   final String? agentIdFilter;
+  final CollectionCategory? initialCategory;
+
+  @override
+  State<CollectionsQueueScreen> createState() => _CollectionsQueueScreenState();
+}
+
+class _CollectionsQueueScreenState extends State<CollectionsQueueScreen> {
+  String _search = '';
+  SearchFieldScope _searchScope = SearchFieldScope.all;
+  CollectionCategory? _categoryFilter;
+
+  @override
+  void initState() {
+    super.initState();
+    _categoryFilter = widget.initialCategory;
+  }
+
+  @override
+  void didUpdateWidget(covariant CollectionsQueueScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialCategory != widget.initialCategory) {
+      setState(() => _categoryFilter = widget.initialCategory);
+    }
+  }
 
   Future<void> _showQuickPaymentDialog(
     BuildContext context,
@@ -123,206 +148,306 @@ class CollectionsQueueScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final portfolio = context.watch<LoanPortfolioProvider>();
-    final user = context.watch<AuthService>().currentUser;
+    final auth = context.watch<AuthService>();
+    final user = auth.currentUser;
 
-    final scopedLoans = agentIdFilter == null
+    final roleScoped = widget.agentIdFilter != null
         ? portfolio.loans
-        : portfolio.loans
-            .where((l) => l.assignedAgentId == agentIdFilter)
-            .toList();
+            .where((l) => l.assignedAgentId == widget.agentIdFilter)
+            .toList()
+        : auth.visibleLoansFor(portfolio.loans, portfolio.borrowers);
+
+    final filtered = roleScoped.where((loan) {
+      if (_categoryFilter != null &&
+          CollectionCategory.fromLoan(loan) != _categoryFilter) {
+        return false;
+      }
+      final b = portfolio.borrowerById(loan.borrowerId);
+      return OmniSearchEngine.matches(
+        loan: loan,
+        borrower: b,
+        query: _search,
+        scope: _searchScope,
+      );
+    }).toList();
 
     final queue = DelinquencyEngine.sortCollectionsQueue(
-      loans: scopedLoans,
+      loans: filtered,
       allLogs: portfolio.collectionLogs,
     );
 
-    if (queue.isEmpty) {
-      return const Center(child: Text('No active accounts in collections queue.'));
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(12),
-      itemCount: queue.length,
-      itemBuilder: (context, index) {
-        final loan = queue[index];
-        final borrower = portfolio.borrowerById(loan.borrowerId);
-        if (borrower == null) return const SizedBox.shrink();
-
-        final logs = portfolio.logsForLoan(loan.loanId);
-        final hasBrokenPtp = logs.any((l) => l.ptpStatus == PtpStatus.broken);
-        final openPtp = logs.where((l) => l.ptpStatus == PtpStatus.open).toList();
-
-        final priorityColor = loan.earlyWarningFlag || hasBrokenPtp || loan.dpd > 30
-            ? Colors.red.shade700
-            : loan.dpd > 0
-                ? Colors.amber.shade800
-                : Colors.green.shade700;
-
-        return Card(
-          margin: const EdgeInsets.only(bottom: 10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: priorityColor.withValues(alpha: 0.35)),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText:
+                  'Omni-Search: Name, Mobile, Loan No, App No, Address, Pincode...',
+              prefixIcon: const Icon(Icons.search),
+              border: const OutlineInputBorder(),
+              isDense: true,
+              suffixIcon: _search.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => setState(() => _search = ''),
+                    )
+                  : null,
+            ),
+            onChanged: (v) => setState(() => _search = v),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 14,
-                      backgroundColor: priorityColor,
-                      child: Text(
-                        '${index + 1}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+        ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          child: Row(
+            children: [
+              FilterChip(
+                label: Text('All (${roleScoped.length})'),
+                selected: _categoryFilter == null,
+                onSelected: (_) => setState(() => _categoryFilter = null),
+              ),
+              const SizedBox(width: 6),
+              for (final cat in CollectionCategory.values) ...[
+                FilterChip(
+                  label: Text(
+                    '${cat.label} (${roleScoped.where((l) => CollectionCategory.fromLoan(l) == cat).length})',
+                  ),
+                  selected: _categoryFilter == cat,
+                  onSelected: (_) => setState(() => _categoryFilter = cat),
+                ),
+                const SizedBox(width: 6),
+              ],
+            ],
+          ),
+        ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          child: Row(
+            children: [
+              for (final scope in SearchFieldScope.values) ...[
+                ChoiceChip(
+                  label: Text(scope.label, style: const TextStyle(fontSize: 11)),
+                  selected: _searchScope == scope,
+                  visualDensity: VisualDensity.compact,
+                  onSelected: (_) => setState(() => _searchScope = scope),
+                ),
+                const SizedBox(width: 6),
+              ],
+            ],
+          ),
+        ),
+        Expanded(
+          child: queue.isEmpty
+              ? const Center(
+                  child: Text('No matching accounts in this collection bucket.'),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: queue.length,
+                  itemBuilder: (context, index) {
+                    final loan = queue[index];
+                    final borrower = portfolio.borrowerById(loan.borrowerId);
+                    if (borrower == null) return const SizedBox.shrink();
+
+                    final category = CollectionCategory.fromLoan(loan);
+                    final logs = portfolio.logsForLoan(loan.loanId);
+                    final hasBrokenPtp =
+                        logs.any((l) => l.ptpStatus == PtpStatus.broken);
+                    final openPtp = logs
+                        .where((l) => l.ptpStatus == PtpStatus.open)
+                        .toList();
+
+                    final priorityColor = category == CollectionCategory.npa ||
+                            loan.earlyWarningFlag ||
+                            hasBrokenPtp
+                        ? Colors.red.shade700
+                        : category == CollectionCategory.dpd
+                            ? Colors.amber.shade800
+                            : Colors.green.shade700;
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: priorityColor.withValues(alpha: 0.35),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => LoanDetailScreen(loanId: loan.loanId),
-                          ),
-                        ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              borrower.fullName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 14,
+                                  backgroundColor: priorityColor,
+                                  child: Text(
+                                    '${index + 1}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => LoanDetailScreen(
+                                          loanId: loan.loanId,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          borrower.fullName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${loan.loanId} • App: ${loan.applicationNo} • ${borrower.mobilePrimary}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.black54,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${borrower.branch ?? ""} ${borrower.pincode ?? ""} • ${borrower.addressText}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.black54,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      IndianFormatters.formatInr(
+                                        category == CollectionCategory.regular
+                                            ? loan.emiAmount
+                                            : loan.totalOutstanding,
+                                        showDecimals: false,
+                                      ),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    Text(
+                                      category == CollectionCategory.npa
+                                          ? 'NPA • ${loan.dpd} DPD'
+                                          : category == CollectionCategory.dpd
+                                              ? '${loan.dpd} DPD (SMA)'
+                                              : 'EMI Due • 0 DPD',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: priorityColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
-                            Text(
-                              '${loan.loanId} • ${borrower.mobilePrimary}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.black54,
+                            if (openPtp.isNotEmpty || hasBrokenPtp) ...[
+                              const SizedBox(height: 6),
+                              Wrap(
+                                spacing: 6,
+                                children: [
+                                  if (hasBrokenPtp)
+                                    Chip(
+                                      label: const Text(
+                                        'BROKEN PTP',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      backgroundColor: Colors.red.shade700,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  if (openPtp.isNotEmpty &&
+                                      openPtp.first.ptpDate != null)
+                                    Chip(
+                                      label: Text(
+                                        'Open PTP: ${IndianFormatters.formatDate(openPtp.first.ptpDate!)}',
+                                        style: const TextStyle(fontSize: 10),
+                                      ),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                ],
                               ),
+                            ],
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: FilledButton.icon(
+                                    onPressed: () => _showQuickPaymentDialog(
+                                      context,
+                                      portfolio,
+                                      loan,
+                                      borrower,
+                                      user?.uid ?? 'uid_agent',
+                                    ),
+                                    icon: const Icon(Icons.payments, size: 16),
+                                    label: Text(
+                                      category == CollectionCategory.regular
+                                          ? 'Collect EMI'
+                                          : 'Collect Overdue',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => showModalBottomSheet<void>(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      builder: (sheetCtx) => PtpLogBottomSheet(
+                                        loan: loan,
+                                        borrower: borrower,
+                                        agentId: user?.uid ?? 'uid_agent',
+                                        onSave: (log) async {
+                                          await portfolio.logCollectionActivity(log);
+                                          if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                                        },
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.event_note, size: 16),
+                                    label: const Text('Log PTP'),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          IndianFormatters.formatInr(
-                            loan.totalOutstanding,
-                            showDecimals: false,
-                          ),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                        Text(
-                          '${loan.dpd} DPD • ${loan.agingBucket.label}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: priorityColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                    );
+                  },
                 ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    if (loan.earlyWarningFlag)
-                      _pill('EARLY WARNING', Colors.red.shade700),
-                    if (hasBrokenPtp)
-                      _pill('BROKEN PTP', Colors.deepOrange.shade700),
-                    if (openPtp.isNotEmpty && openPtp.first.ptpDate != null)
-                      _pill(
-                        'OPEN PTP: ${IndianFormatters.formatDate(openPtp.first.ptpDate!)} (${IndianFormatters.formatInr(openPtp.first.ptpAmount ?? 0, showDecimals: false)})',
-                        Colors.indigo.shade700,
-                      ),
-                  ],
-                ),
-                const Divider(height: 16),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () =>
-                          LocationService.launchPhoneCall(borrower.mobilePrimary),
-                      icon: const Icon(Icons.call, size: 16),
-                      label: const Text('Call'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () => LocationService.launchWhatsAppReminder(
-                        mobile: borrower.mobilePrimary,
-                        message:
-                            'Namaste ${borrower.fullName}, payment reminder from Saro Devi Enterprises '
-                            'for Loan ${loan.loanId}. Current DPD: ${loan.dpd} days. '
-                            'EMI: ${IndianFormatters.formatInr(loan.emiAmount, showDecimals: false)}. Please arrange via UPI/NEFT.',
-                      ),
-                      icon: const Icon(Icons.chat, size: 16),
-                      label: const Text('WhatsApp'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () => PtpLogBottomSheet.show(
-                        context,
-                        loan: loan,
-                        borrower: borrower,
-                        agentId: user?.uid ?? loan.assignedAgentId,
-                        onSave: portfolio.logCollectionActivity,
-                      ),
-                      icon: const Icon(Icons.event_note, size: 16),
-                      label: const Text('Log PTP'),
-                    ),
-                    FilledButton.icon(
-                      onPressed: () => _showQuickPaymentDialog(
-                        context,
-                        portfolio,
-                        loan,
-                        borrower,
-                        user?.uid ?? loan.assignedAgentId,
-                      ),
-                      icon: const Icon(Icons.currency_rupee, size: 16),
-                      label: const Text('Record Payment'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _pill(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: color,
         ),
-      ),
+      ],
     );
   }
 }
+
+

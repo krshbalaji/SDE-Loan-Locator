@@ -10,6 +10,7 @@ import '../../services/auth_service.dart';
 import '../../services/firestore_loan_service.dart';
 import '../../services/location_service.dart';
 import '../../utils/indian_formatters.dart';
+import '../../utils/omni_search.dart';
 import 'loan_detail_screen.dart';
 
 /// Portfolio loan directory with search, aging filters, and New Loan Origination dialog.
@@ -308,22 +309,22 @@ class _LoanListScreenState extends State<LoanListScreen> {
     final portfolio = context.watch<LoanPortfolioProvider>();
     final auth = context.watch<AuthService>();
 
-    final filtered = portfolio.loans.where((loan) {
-      if (widget.agentIdFilter != null &&
-          loan.assignedAgentId != widget.agentIdFilter) {
-        return false;
-      }
+    final roleScoped = widget.agentIdFilter != null
+        ? portfolio.loans
+            .where((l) => l.assignedAgentId == widget.agentIdFilter)
+            .toList()
+        : auth.visibleLoansFor(portfolio.loans, portfolio.borrowers);
+
+    final filtered = roleScoped.where((loan) {
       if (_bucketFilter != null && loan.agingBucket != _bucketFilter) {
         return false;
       }
-      if (_search.trim().isNotEmpty) {
-        final b = portfolio.borrowerById(loan.borrowerId);
-        final hay =
-            '${loan.loanId} ${loan.applicationNo} ${b?.fullName ?? ""} ${b?.mobilePrimary ?? ""} ${b?.addressText ?? ""}'
-                .toLowerCase();
-        if (!hay.contains(_search.trim().toLowerCase())) return false;
-      }
-      return true;
+      final b = portfolio.borrowerById(loan.borrowerId);
+      return OmniSearchEngine.matches(
+        loan: loan,
+        borrower: b,
+        query: _search,
+      );
     }).toList();
 
     return Scaffold(
@@ -333,7 +334,7 @@ class _LoanListScreenState extends State<LoanListScreen> {
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
             child: TextField(
               decoration: const InputDecoration(
-                hintText: 'Search by borrower, Loan ID, Application No, mobile...',
+                hintText: 'Omni-Search: Name, Mobile, Loan No, App No, Area, Pincode, PAN...',
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
                 isDense: true,
@@ -441,3 +442,6 @@ class _LoanListScreenState extends State<LoanListScreen> {
     );
   }
 }
+
+
+

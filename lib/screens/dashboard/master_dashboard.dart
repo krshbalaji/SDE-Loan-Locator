@@ -6,10 +6,12 @@ import '../../engines/delinquency_engine.dart';
 import '../../models/loan_product_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_loan_service.dart';
+import '../../services/local_vault_service.dart';
 import '../../services/pdf_export_service.dart';
 import '../../utils/indian_formatters.dart';
 import '../../widgets/aging_bucket_chart.dart';
 import '../admin/excel_import_screen.dart';
+import '../admin/team_allocation_screen.dart';
 import '../collections/collections_queue_screen.dart';
 import '../loans/loan_list_screen.dart';
 import '../map/field_locator_map_screen.dart';
@@ -272,6 +274,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
       'Loans Portfolio',
       'Field Geo-Locator',
       'Collections Queue',
+      'Team & Territory',
       'Excel Bulk Import',
     ];
 
@@ -280,6 +283,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
       const LoanListScreen(),
       const FieldLocatorMapScreen(),
       const CollectionsQueueScreen(),
+      const TeamAllocationScreen(),
       const ExcelImportScreen(),
     ];
 
@@ -295,6 +299,24 @@ class _MasterDashboardState extends State<MasterDashboard> {
                 visualDensity: VisualDensity.compact,
               ),
             ),
+          IconButton(
+            tooltip: 'Backup Local Drive Vault (.json)',
+            icon: const Icon(Icons.save_alt),
+            onPressed: () async {
+              await LocalVaultService.exportVaultToLocalDrive(portfolio);
+            },
+          ),
+          IconButton(
+            tooltip: 'Restore Local Drive Vault (.json)',
+            icon: const Icon(Icons.restore_page_outlined),
+            onPressed: () async {
+              final n = await LocalVaultService.restoreVaultFromLocalDrive(portfolio);
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Restored $n accounts from Local Vault.')),
+              );
+            },
+          ),
           IconButton(
             tooltip: 'Run Daily DPD & PTP Sweep',
             icon: const Icon(Icons.sync),
@@ -366,7 +388,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
       ratePerKmInr: _conveyanceRatePerKm,
     );
     final kpi = DelinquencyEngine.computePortfolioKpis(
-      loans: portfolio.loans,
+      loans: auth.visibleLoansFor(portfolio.loans, portfolio.borrowers),
       transactions: portfolio.transactions,
       agentNames: auth.knownAgentNames,
       asOfDate: DateTime.now(),
@@ -629,4 +651,6 @@ class _MasterDashboardState extends State<MasterDashboard> {
     );
   }
 }
+
+
 

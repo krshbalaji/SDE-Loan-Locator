@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -157,9 +156,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           for (final user in AuthService.demoUsers)
                             ActionChip(
                               avatar: Icon(
-                                user.role == UserRole.master
+                                user.isExecutive
                                     ? Icons.shield
-                                    : user.role == UserRole.admin
+                                    : user.isAdminOrAbove
                                         ? Icons.admin_panel_settings
                                         : Icons.location_on,
                                 size: 16,
@@ -180,3 +179,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
+
+

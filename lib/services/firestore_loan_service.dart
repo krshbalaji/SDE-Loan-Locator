@@ -1390,6 +1390,34 @@ class LoanPortfolioProvider extends ChangeNotifier {
     await refresh();
   }
 
+  /// Bulk-assigns matching borrowers and their loans to a target collection agent.
+  Future<int> assignAccountsToAgent({
+    required List<String> loanIds,
+    required String targetAgentUid,
+  }) async {
+    if (loanIds.isEmpty) return 0;
+    final loanIdSet = loanIds.toSet();
+    final now = DateTime.now();
+    var count = 0;
+
+    for (final loan in loans.where((l) => loanIdSet.contains(l.loanId))) {
+      final borrower = borrowerById(loan.borrowerId);
+      if (borrower != null && borrower.assignedAgentId != targetAgentUid) {
+        await _repository.saveBorrower(
+          borrower.copyWith(assignedAgentId: targetAgentUid, updatedAt: now),
+        );
+      }
+      await _repository.applyDelinquencyUpdate(
+        updatedLoan: loan.copyWith(assignedAgentId: targetAgentUid),
+        updatedInstallments: const [],
+        brokenPtpLogIds: const [],
+      );
+      count++;
+    }
+    await refresh();
+    return count;
+  }
+
   /// Runs the daily DPD, aging bucket, broken-PTP, and late-fee sweep on demand.
   Future<int> runDailyDelinquencySweep({DateTime? asOfDate}) async {
     final today = asOfDate ?? DateTime.now();
@@ -1414,6 +1442,8 @@ class LoanPortfolioProvider extends ChangeNotifier {
     return updatedCount;
   }
 }
+
+
 
 
 

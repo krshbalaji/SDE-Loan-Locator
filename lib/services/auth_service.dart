@@ -1,21 +1,25 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
+import '../models/borrower_model.dart';
+import '../models/loan_model.dart';
 import '../models/user_model.dart';
 
-/// Role-Based Access Control service using Firebase Auth Custom Claims + `users/{uid}`.
-/// Automatically supports Demo Mode authentication when Firebase keys are unconfigured.
+/// Role-Based Access Control & In-App Staff Provisioning service.
 class AuthService extends ChangeNotifier {
   AuthService({required this.useFirebase});
 
   final bool useFirebase;
 
   AppUser? _currentUser;
+  List<AppUser> _staffDirectory = [];
   bool _isLoading = false;
   String? _errorMessage;
 
   AppUser? get currentUser => _currentUser;
+  List<AppUser> get staffDirectory => List.unmodifiable(_staffDirectory);
   bool get isAuthenticated => _currentUser != null;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
@@ -24,51 +28,166 @@ class AuthService extends ChangeNotifier {
     AppUser(
       uid: 'uid_master_balaji',
       email: 'balaji@sde-finance.in',
-      displayName: 'A. K. Balaji (Master)',
-      role: UserRole.master,
+      displayName: 'A. K. Balaji (CEO)',
+      role: UserRole.ceo,
       phone: '+919842100001',
+      zone: 'All Zones',
       branch: 'Madurai HQ',
+    ),
+    AppUser(
+      uid: 'uid_md_saro',
+      email: 'md@sde-finance.in',
+      displayName: 'Saro Devi (MD)',
+      role: UserRole.md,
+      phone: '+919842100000',
+      zone: 'All Zones',
+      branch: 'Madurai HQ',
+    ),
+    AppUser(
+      uid: 'uid_am_sundar',
+      email: 'sundar.am@sde-finance.in',
+      displayName: 'Sundaravel (Area Manager)',
+      role: UserRole.areaManager,
+      phone: '+919842100005',
+      zone: 'Madurai',
+      branch: 'Madurai Cluster',
     ),
     AppUser(
       uid: 'uid_admin_meena',
       email: 'meena@sde-finance.in',
-      displayName: 'Meena Sundaram (Branch Admin)',
-      role: UserRole.admin,
+      displayName: 'Meena Sundaram (Branch Manager)',
+      role: UserRole.branchManager,
       phone: '+919842100002',
-      branch: 'Madurai HQ',
+      zone: 'Madurai',
+      branch: 'MADURAI',
+    ),
+    AppUser(
+      uid: 'uid_cm_ravi',
+      email: 'ravi.cm@sde-finance.in',
+      displayName: 'Ravi Shankar (Collection Manager)',
+      role: UserRole.collectionManager,
+      phone: '+919842100006',
+      zone: 'Madurai',
+      branch: 'MADURAI',
     ),
     AppUser(
       uid: 'uid_agent_karthik',
       email: 'karthik@sde-finance.in',
-      displayName: 'Karthik Raja (Field Officer)',
+      displayName: 'Karthik Raja (Agent)',
       role: UserRole.agent,
       phone: '+919842100011',
-      branch: 'Madurai North',
+      zone: 'Madurai',
+      branch: 'MADURAI',
     ),
     AppUser(
       uid: 'uid_agent_priya',
       email: 'priya@sde-finance.in',
-      displayName: 'Priya Selvam (Field Officer)',
+      displayName: 'Priya Selvam (Agent)',
       role: UserRole.agent,
       phone: '+919842100012',
-      branch: 'Madurai South',
+      zone: 'Madurai',
+      branch: 'TIRUMANGALAM',
     ),
   ];
 
+  List<AppUser> get allStaff {
+    if (_staffDirectory.isNotEmpty) return _staffDirectory;
+    return demoUsers;
+  }
+
+  List<AppUser> get activeAgents =>
+      allStaff.where((u) => u.isActive && u.isAgent).toList();
+
   Map<String, String> get knownAgentNames => {
         for (final u in demoUsers) u.uid: u.displayName,
+        for (final u in _staffDirectory) u.uid: u.displayName,
       };
 
+  /// Filters loans strictly according to the logged-in user's role & territory.
+  List<LoanModel> visibleLoansFor(
+    List<LoanModel> allLoans,
+    List<BorrowerModel> borrowers,
+  ) {
+    final user = _currentUser;
+    if (user == null) return const [];
+    if (user.isExecutive) return allLoans;
+
+    if (user.isAgent) {
+      return allLoans.where((l) => l.assignedAgentId == user.uid).toList();
+    }
+
+    final borrowerMap = {for (final b in borrowers) b.borrowerId: b};
+    final teamUids = allStaff
+        .where((s) =>
+            s.uid == user.uid ||
+            s.reportingManagerId == user.uid ||
+            _branchMatches(user, s.branch))
+        .map((s) => s.uid)
+        .toSet();
+
+    return allLoans.where((loan) {
+      if (teamUids.contains(loan.assignedAgentId)) return true;
+      final b = borrowerMap[loan.borrowerId];
+      if (b == null) return false;
+      return _branchMatches(user, b.branch ?? b.addressText);
+    }).toList();
+  }
+
+  bool _branchMatches(AppUser manager, String targetBranchOrArea) {
+    final target = targetBranchOrArea.trim().toLowerCase();
+    if (target.isEmpty) return false;
+    if (manager.isAreaManager) {
+      final z = manager.zone.trim().toLowerCase();
+      if (z.isNotEmpty && z != 'all zones' && target.contains(z)) return true;
+    }
+    final b = manager.branch.trim().toLowerCase();
+    if (b.isEmpty || b == 'madurai hq' || b == 'all') return true;
+    return target.contains(b);
+  }
+
   Future<void> init() async {
-    if (!useFirebase) return;
+    if (!useFirebase) {
+      _staffDirectory = List<AppUser>.from(demoUsers);
+      return;
+    }
     final fbUser = FirebaseAuth.instance.currentUser;
     if (fbUser != null) {
-      _currentUser = await _resolveFirebaseUser(fbUser);
+      final resolved = await _resolveFirebaseUser(fbUser);
+      if (!resolved.isActive) {
+        await signOut();
+        return;
+      }
+      _currentUser = resolved;
+      await refreshStaffDirectory();
       notifyListeners();
     }
   }
 
-  /// Signs in via Firebase Auth (production) or matches demo persona (demo mode).
+  Future<void> refreshStaffDirectory() async {
+    if (!useFirebase) {
+      if (_staffDirectory.isEmpty) {
+        _staffDirectory = List<AppUser>.from(demoUsers);
+      }
+      notifyListeners();
+      return;
+    }
+    try {
+      final snap = await FirebaseFirestore.instance.collection('users').get();
+      final fetched = snap.docs
+          .map((d) => AppUser.fromMap(d.data(), id: d.id))
+          .toList();
+      final merged = <String, AppUser>{
+        for (final d in demoUsers) d.uid: d,
+        for (final u in fetched) u.uid: u,
+      };
+      _staffDirectory = merged.values.toList()
+        ..sort((a, b) => b.role.rank.compareTo(a.role.rank));
+      notifyListeners();
+    } catch (_) {
+      // Retain cached directory if offline or quota-limited.
+    }
+  }
+
   Future<bool> signInWithEmailPassword(String email, String password) async {
     _isLoading = true;
     _errorMessage = null;
@@ -82,10 +201,15 @@ class AuthService extends ChangeNotifier {
       }
 
       if (!useFirebase) {
-        final matched = demoUsers.firstWhere(
+        final pool = _staffDirectory.isNotEmpty ? _staffDirectory : demoUsers;
+        final matched = pool.firstWhere(
           (u) => u.email.toLowerCase() == cleanEmail,
-          orElse: () => demoUsers.first,
+          orElse: () => pool.first,
         );
+        if (!matched.isActive) {
+          _errorMessage = 'This account has been deactivated by management.';
+          return false;
+        }
         _currentUser = matched;
         return true;
       }
@@ -99,7 +223,15 @@ class AuthService extends ChangeNotifier {
         _errorMessage = 'Authentication returned no user.';
         return false;
       }
-      _currentUser = await _resolveFirebaseUser(user);
+      final resolved = await _resolveFirebaseUser(user);
+      if (!resolved.isActive) {
+        await FirebaseAuth.instance.signOut();
+        _errorMessage =
+            'Account suspended. Contact your Branch Manager or MD/CEO.';
+        return false;
+      }
+      _currentUser = resolved;
+      await refreshStaffDirectory();
       return true;
     } on FirebaseAuthException catch (e) {
       _errorMessage = e.message ?? 'Login failed (${e.code}).';
@@ -113,10 +245,101 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  /// One-tap persona login for offline Demo Mode testing.
+  /// Creates a new staff user in-app using a secondary FirebaseApp instance
+  /// so the currently signed-in MD/CEO/AM/BM/CM never loses their session.
+  Future<AppUser> provisionStaffUser({
+    required String displayName,
+    required String email,
+    required String password,
+    required UserRole role,
+    required String phone,
+    required String zone,
+    required String branch,
+  }) async {
+    final creator = _currentUser;
+    if (creator == null || !creator.creatableRoles.contains(role)) {
+      throw StateError('You do not have permission to create ${role.label}.');
+    }
+
+    final cleanEmail = email.trim().toLowerCase();
+    if (!useFirebase) {
+      final created = AppUser(
+        uid: 'uid_${role.wireValue.toLowerCase()}_${DateTime.now().millisecondsSinceEpoch % 100000}',
+        email: cleanEmail,
+        displayName: displayName.trim(),
+        role: role,
+        phone: phone.trim(),
+        zone: zone.trim(),
+        branch: branch.trim().toUpperCase(),
+        reportingManagerId: creator.uid,
+        isActive: true,
+      );
+      _staffDirectory = [...allStaff, created];
+      notifyListeners();
+      return created;
+    }
+
+    final secondaryName = 'provision_${DateTime.now().millisecondsSinceEpoch}';
+    FirebaseApp? secondaryApp;
+    try {
+      secondaryApp = await Firebase.initializeApp(
+        name: secondaryName,
+        options: Firebase.app().options,
+      );
+      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+      final cred = await secondaryAuth.createUserWithEmailAndPassword(
+        email: cleanEmail,
+        password: password,
+      );
+      final newUid = cred.user!.uid;
+      await cred.user!.updateDisplayName(displayName.trim());
+
+      final appUser = AppUser(
+        uid: newUid,
+        email: cleanEmail,
+        displayName: displayName.trim(),
+        role: role,
+        phone: phone.trim(),
+        zone: zone.trim(),
+        branch: branch.trim().toUpperCase(),
+        reportingManagerId: creator.uid,
+        isActive: true,
+      );
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(newUid)
+          .set(appUser.toMap());
+
+      await secondaryAuth.signOut();
+      await refreshStaffDirectory();
+      return appUser;
+    } finally {
+      if (secondaryApp != null) {
+        await secondaryApp.delete();
+      }
+    }
+  }
+
+  /// Toggles active status (remote kill-switch) or updates role/branch of a staff member.
+  Future<void> updateStaffUser(AppUser updated) async {
+    if (!useFirebase) {
+      _staffDirectory = allStaff
+          .map((u) => u.uid == updated.uid ? updated : u)
+          .toList();
+      notifyListeners();
+      return;
+    }
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(updated.uid)
+        .set(updated.toMap(), SetOptions(merge: true));
+    await refreshStaffDirectory();
+  }
+
   void signInAsDemoRole(UserRole role) {
     _errorMessage = null;
-    _currentUser = demoUsers.firstWhere(
+    _currentUser = allStaff.firstWhere(
       (u) => u.role == role,
       orElse: () => demoUsers.first,
     );
@@ -130,11 +353,9 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<AppUser> _resolveFirebaseUser(User fbUser) async {
-    // 1. Prefer Firebase Auth Custom Claims (`role: MASTER | ADMIN | AGENT`)
     final tokenResult = await fbUser.getIdTokenResult(true);
     final claimRole = tokenResult.claims?['role'] as String?;
 
-    // 2. Fallback / enrich with `users/{uid}` Firestore profile document
     final doc = await FirebaseFirestore.instance
         .collection('users')
         .doc(fbUser.uid)
@@ -151,7 +372,9 @@ class AuthService extends ChangeNotifier {
           'Officer',
       role: role,
       phone: data['phone'] as String? ?? '',
+      zone: data['zone'] as String? ?? 'Tamil Nadu South',
       branch: data['branch'] as String? ?? 'Madurai HQ',
+      reportingManagerId: data['reporting_manager_id'] as String? ?? '',
       isActive: data['is_active'] as bool? ?? true,
     );
   }
