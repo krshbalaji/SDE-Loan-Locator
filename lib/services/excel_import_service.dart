@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
 
+import '../engines/delinquency_engine.dart';
 import '../engines/geo_filter_engine.dart';
 import '../models/borrower_model.dart';
 import '../models/loan_model.dart';
@@ -43,6 +44,7 @@ class ExcelImportRow {
     this.warnings = const [],
     this.isDuplicateBorrower = false,
     this.isDuplicateLoan = false,
+    this.isClosedOrRejected = false,
   });
 
   final int rowNumber;
@@ -74,12 +76,14 @@ class ExcelImportRow {
   final List<String> warnings;
   final bool isDuplicateBorrower;
   final bool isDuplicateLoan;
+  final bool isClosedOrRejected;
 
   bool get isValid =>
       customerName.trim().isNotEmpty &&
       mobilePrimary.trim().isNotEmpty &&
       amount > 0 &&
-      !isDuplicateLoan;
+      !isDuplicateLoan &&
+      !isClosedOrRejected;
 }
 
 class ExcelParseResult {
@@ -97,15 +101,14 @@ class ExcelParseResult {
   int get duplicateLoanCount => rows.where((r) => r.isDuplicateLoan).length;
   int get duplicateBorrowerCount =>
       rows.where((r) => r.isDuplicateBorrower).length;
+  int get closedOrRejectedCount =>
+      rows.where((r) => r.isClosedOrRejected).length;
 }
 
-/// Dual-Schema `.xlsx` and `.csv` Bulk Ingestion Pipeline.
-/// Supports both:
-/// 1) Legacy 7-column sheets: `Location`, `ApplicationNo`, `LoanNo`, `CustomerName`, `Amount`, `LatLong`, `MobileNo`
-/// 2) Full NBFC master sheets: `LOAN_ID`, `APP_NO`, `APPLICANT_NAME`, `CO_APPLICANT_NAME`, `MOBILE_NO`,
-///    `PAN_NO`, `UID_NO`, `CKYC_ID`, `CERSAI_ID`, `MAX_CREDIT_SCORE`, `PROPERTY_LATLONG`,
-///    `VILLAGE`/`DISTRICT`/`BRANCH`/`PINCODE`, `TOTAL_DISBURSED_AMOUNT`/`SANCTION_AMOUNT`,
-///    `ROI`, `TENURE`, `MOB`, `DPD`, `POS`, `LTV`, `FOIR`, `ASSET_CLASSIFICATION_AS_PER_OS`, `DATE_LAST_PAID`.
+/// Content-Aware + Dual-Schema `.xlsx` and `.csv` Bulk Ingestion Pipeline.
+/// Combines header-alias matching with cell-content pattern inference (detecting
+/// `lat, lng` coordinates, 10-digit Indian mobiles, PAN IDs, amounts, and names
+/// regardless of header naming or column order).
 class ExcelImportService {
   ExcelImportService._();
 
@@ -187,7 +190,7 @@ class ExcelImportService {
     );
   }
 
-  /// Parses raw `.xlsx` bytes with dual-schema header auto-detection.
+  /// Parses raw `.xlsx` bytes with content-aware + header auto-detection.
   static ExcelParseResult parseExcelBytes({
     required Uint8List bytes,
     required String fileName,
@@ -224,6 +227,37 @@ class ExcelImportService {
     );
   }
 
+  /// Scores column cell contents across sample rows to infer missing/renamed headers.
+  static int _inferColumnByContent(
+    List<List<String>> grid,
+    bool Function(String val) matcher, {
+    Set<int> excludeCols = const {},
+  }) {
+    if (grid.length <= 1) return -1;
+    final sampleLimit = grid.length < 25 ? grid.length : 25;
+    var bestCol = -1;
+    var bestHits = 0;
+
+    final maxCols = grid.fold<int>(0, (m, r) => r.length > m ? r.length : m);
+    for (var col = 0; col < maxCols; col++) {
+      if (excludeCols.contains(col)) continue;
+      var hits = 0;
+      var nonEmpty = 0;
+      for (var r = 1; r < sampleLimit; r++) {
+        if (col >= grid[r].length) continue;
+        final v = grid[r][col].trim();
+        if (v.isEmpty || v.toUpperCase() == 'N/A') continue;
+        nonEmpty++;
+        if (matcher(v)) hits++;
+      }
+      if (nonEmpty > 0 && hits > bestHits && (hits / nonEmpty) >= 0.4) {
+        bestHits = hits;
+        bestCol = col;
+      }
+    }
+    return bestCol;
+  }
+
   static List<ExcelImportRow> _parseMatrix({
     required List<List<String>> grid,
     required List<BorrowerModel> existingBorrowers,
@@ -247,7 +281,11 @@ class ExcelImportService {
         .map((c) => c.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), ''))
         .toList();
 
-    int colExactOrContains(List<String> exactKeys, List<String> partialKeys, int fallback) {
+    int colExactOrContains(
+      List<String> exactKeys,
+      List<String> partialKeys,
+      int fallback,
+    ) {
       for (var i = 0; i < headerCells.length; i++) {
         if (exactKeys.contains(headerCells[i])) return i;
       }
@@ -271,6 +309,78 @@ class ExcelImportService {
             headerCells[0].isEmpty);
     final offset = hasSerialCol ? 1 : 0;
 
+    var latLngIdx = colExactOrContains(
+      ['propertylatlong', 'latlong', 'latlng', 'coordinates'],
+      ['latlong', 'latlng'],
+      -1,
+    );
+    if (latLngIdx < 0) {
+      latLngIdx = _inferColumnByContent(
+        grid,
+        (v) => GeoFilterEngine.parseLatLong(v) != null,
+      );
+    }
+    if (latLngIdx < 0 && !isNbfcMaster) latLngIdx = offset + 5;
+
+    var mobileIdx = colExactOrContains(
+      ['mobileno', 'mobile', 'phone', 'primarymobile'],
+      ['mobileno', 'mobile'],
+      -1,
+    );
+    if (mobileIdx < 0) {
+      mobileIdx = _inferColumnByContent(
+        grid,
+        (v) =>
+            RegExp(r'^(?:\+?91)?[6-9]\d{9}$')
+                .hasMatch(v.replaceAll(RegExp(r'[\s\-]'), '')),
+        excludeCols: {latLngIdx},
+      );
+    }
+    if (mobileIdx < 0 && !isNbfcMaster) mobileIdx = offset + 6;
+
+    var panIdx = colExactOrContains(['panno', 'pan'], ['panno'], -1);
+    if (panIdx < 0) {
+      panIdx = _inferColumnByContent(
+        grid,
+        (v) => IndianFormatters.isValidPan(v.toUpperCase()),
+        excludeCols: {latLngIdx, mobileIdx},
+      );
+    }
+
+    var amtIdx = colExactOrContains(
+      ['totaldisbursedamount', 'sanctionamount', 'amount', 'principal'],
+      ['disbursedamount', 'sanctionamount', 'amount'],
+      -1,
+    );
+    if (amtIdx < 0) {
+      amtIdx = _inferColumnByContent(
+        grid,
+        (v) {
+          final n = _parseDouble(v);
+          return n != null && n >= 10000 && !v.contains(',') && v.length <= 10;
+        },
+        excludeCols: {latLngIdx, mobileIdx, panIdx},
+      );
+    }
+    if (amtIdx < 0 && !isNbfcMaster) amtIdx = offset + 4;
+
+    var nameIdx = colExactOrContains(
+      ['applicantname', 'customername', 'fullname', 'name'],
+      ['applicantname', 'customername'],
+      -1,
+    );
+    if (nameIdx < 0) {
+      nameIdx = _inferColumnByContent(
+        grid,
+        (v) =>
+            RegExp(r'^[A-Za-z][A-Za-z\s\.]{3,40}$').hasMatch(v) &&
+            !v.toLowerCase().contains('madurai') &&
+            !v.toLowerCase().contains('india'),
+        excludeCols: {latLngIdx, mobileIdx, panIdx, amtIdx},
+      );
+    }
+    if (nameIdx < 0 && !isNbfcMaster) nameIdx = offset + 3;
+
     final locIdx = colExactOrContains(
       ['location', 'address', 'village', 'district'],
       ['location', 'address'],
@@ -280,6 +390,7 @@ class ExcelImportService {
     final districtIdx = colExactOrContains(['district'], [], -1);
     final branchIdx = colExactOrContains(['branch'], [], -1);
     final pincodeIdx = colExactOrContains(['pincode', 'pin'], [], -1);
+    final statusIdx = colExactOrContains(['currentstatus', 'runstatus', 'status'], [], -1);
 
     final appIdx = colExactOrContains(
       ['appno', 'applicationno', 'partnerapplicationno'],
@@ -291,33 +402,12 @@ class ExcelImportService {
       ['loanno', 'loanid'],
       isNbfcMaster ? -1 : offset + 2,
     );
-    final nameIdx = colExactOrContains(
-      ['applicantname', 'customername', 'fullname', 'name'],
-      ['applicantname', 'customername'],
-      isNbfcMaster ? -1 : offset + 3,
-    );
     final coAppIdx = colExactOrContains(
       ['coapplicantname', 'coapplicant'],
       ['coapplicant'],
       -1,
     );
-    final amtIdx = colExactOrContains(
-      ['totaldisbursedamount', 'sanctionamount', 'amount', 'principal'],
-      ['disbursedamount', 'sanctionamount', 'amount'],
-      isNbfcMaster ? -1 : offset + 4,
-    );
-    final latLngIdx = colExactOrContains(
-      ['propertylatlong', 'latlong', 'latlng', 'coordinates'],
-      ['latlong', 'latlng'],
-      isNbfcMaster ? -1 : offset + 5,
-    );
-    final mobileIdx = colExactOrContains(
-      ['mobileno', 'mobile', 'phone', 'primarymobile'],
-      ['mobileno', 'mobile'],
-      isNbfcMaster ? -1 : offset + 6,
-    );
 
-    final panIdx = colExactOrContains(['panno', 'pan'], ['panno'], -1);
     final uidIdx = colExactOrContains(['uidno', 'aadhaar', 'aadhar'], [], -1);
     final ckycIdx = colExactOrContains(['ckycid', 'ckyc'], [], -1);
     final cersaiIdx = colExactOrContains(['cersaiid', 'cersai'], [], -1);
@@ -355,6 +445,13 @@ class ExcelImportService {
       final rawMobile = _safeStr(row, mobileIdx);
       final rawAmount = _safeStr(row, amtIdx);
       if (name.isEmpty && rawMobile.isEmpty && rawAmount.isEmpty) continue;
+
+      final rawStatus =
+          statusIdx >= 0 ? _safeStr(row, statusIdx).toLowerCase() : '';
+      final isClosedOrRejected = rawStatus.contains('foreclos') ||
+          rawStatus.contains('closed') ||
+          rawStatus.contains('not sanction') ||
+          rawStatus.contains('reject');
 
       final branch = branchIdx >= 0 ? _safeStr(row, branchIdx) : '';
       final pincode = pincodeIdx >= 0 ? _safeStr(row, pincodeIdx) : '';
@@ -398,8 +495,14 @@ class ExcelImportService {
               : null;
 
       final warnings = <String>[];
+      if (isClosedOrRejected) {
+        warnings.add('Status "${_safeStr(row, statusIdx)}" (skipped from active portfolio)');
+      }
+
       final amount = _parseDouble(rawAmount) ?? 0.0;
-      if (amount <= 0) warnings.add('Invalid loan amount "$rawAmount"');
+      if (amount <= 0 && !isClosedOrRejected) {
+        warnings.add('Invalid loan amount "$rawAmount"');
+      }
 
       final coords = GeoFilterEngine.parseLatLong(rawLatLng);
       if (coords == null) {
@@ -469,6 +572,7 @@ class ExcelImportService {
           warnings: warnings,
           isDuplicateBorrower: isDupBorrower,
           isDuplicateLoan: isDupLoan,
+          isClosedOrRejected: isClosedOrRejected,
         ),
       );
     }
@@ -476,9 +580,8 @@ class ExcelImportService {
     return parsedRows;
   }
 
-  /// Commits validated rows into `borrowers`, `loans`, `installment_schedule`, and `transactions`.
-  /// When `MOB` or `DPD` is provided in an imported running NBFC loan, preserves paid installments
-  /// (`1..MOB`) and delinquency state instead of resetting the loan to month 0.
+  /// Commits validated active rows into `borrowers`, `loans`, `installment_schedule`, and `transactions`.
+  /// Preserves imported `MOB`, `DPD`, `agingBucket`, and `POS` from NBFC master datasets.
   static Future<int> commitImport({
     required ExcelParseResult parseResult,
     required LoanPortfolioProvider portfolio,
@@ -560,7 +663,6 @@ class ExcelImportService {
         disbursementDate: disbursedOn,
       );
 
-      // Apply MOB historical repayments so installments 1..MOB are marked PAID.
       if (mob > 0) {
         final scheduleRows = portfolio.scheduleForLoan(
           createdLoan.loanId,
@@ -577,6 +679,23 @@ class ExcelImportService {
             notes: 'Historical installment #${inst.installmentNo} imported via MOB',
           );
         }
+      }
+
+      // Preserve imported DPD & POS overrides from NBFC master dataset
+      final importedDpd = row.dpd ?? 0;
+      final importedPos = row.principalOutstandingOverride;
+      if (importedDpd > 0 || (importedPos != null && importedPos > 0)) {
+        final refreshedLoan = portfolio.loanById(createdLoan.loanId) ?? createdLoan;
+        final updatedLoan = refreshedLoan.copyWith(
+          dpd: importedDpd > 0 ? importedDpd : refreshedLoan.dpd,
+          agingBucket: importedDpd > 0
+              ? DelinquencyEngine.bucketForDpd(importedDpd)
+              : refreshedLoan.agingBucket,
+          principalOutstanding: (importedPos != null && importedPos > 0)
+              ? importedPos
+              : refreshedLoan.principalOutstanding,
+        );
+        await portfolio.updateLoanRecord(updatedLoan);
       }
 
       imported++;
@@ -618,10 +737,10 @@ class ExcelImportService {
   static String _signedDigits(String raw) =>
       raw.replaceAll(RegExp(r'[^0-9-]'), '');
 
-  static double? _parseDouble(String raw) {
-    final cleaned = raw.replaceAll(RegExp(r'[^0-9.-]'), '');
-    if (cleaned.isEmpty || cleaned == '-' || cleaned == '.') return null;
-    return double.tryParse(cleaned);
+  static String _cellText(Data? cell) {
+    final val = cell?.value;
+    if (val == null) return '';
+    return val.toString().trim();
   }
 
   static String _safeStr(List<String> row, int idx) {
@@ -629,10 +748,9 @@ class ExcelImportService {
     return row[idx].trim();
   }
 
-  static String _cellText(Data? cell) {
-    final val = cell?.value;
-    if (val == null) return '';
-    return val.toString().trim();
+  static double? _parseDouble(String raw) {
+    final cleaned = raw.replaceAll(RegExp(r'[^0-9.\-]'), '');
+    if (cleaned.isEmpty) return null;
+    return double.tryParse(cleaned);
   }
 }
-

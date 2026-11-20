@@ -1,4 +1,4 @@
-import 'dart:math';
+﻿import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -145,6 +145,11 @@ class FirestoreLoanService implements LoanDataRepository {
   }
 
   @override
+  Future<void> updateLoanRecord(LoanModel loan) async {
+    await _repository.applyDelinquencyUpdate(loan: loan);
+    await refresh();
+  }
+
   Future<void> saveProduct(LoanProductModel product) async {
     await _products
         .doc(product.productId)
@@ -623,7 +628,7 @@ class InMemoryDemoLoanService implements LoanDataRepository {
       }
     }
 
-    // Loan 1: Current (Green) — 3 of 12 EMIs paid on time
+    // Loan 1: Current (Green) â€” 3 of 12 EMIs paid on time
     seedLoan(
       loanId: 'SDE-LN-2001',
       appNo: 'APP-2026-001',
@@ -636,7 +641,7 @@ class InMemoryDemoLoanService implements LoanDataRepository {
       paidInstallments: 3,
     );
 
-    // Loan 2: 1–30 DPD + PTP Due Today (Amber)
+    // Loan 2: 1â€“30 DPD + PTP Due Today (Amber)
     seedLoan(
       loanId: 'SDE-LN-2002',
       appNo: 'APP-2026-002',
@@ -665,7 +670,7 @@ class InMemoryDemoLoanService implements LoanDataRepository {
       ],
     );
 
-    // Loan 3: 31–60 DPD + Broken PTP + Early Warning (Red)
+    // Loan 3: 31â€“60 DPD + Broken PTP + Early Warning (Red)
     seedLoan(
       loanId: 'SDE-LN-2003',
       appNo: 'APP-2026-003',
@@ -697,7 +702,7 @@ class InMemoryDemoLoanService implements LoanDataRepository {
       ],
     );
 
-    // Loan 4: Asset-Backed LAP — Current (Green)
+    // Loan 4: Asset-Backed LAP â€” Current (Green)
     seedLoan(
       loanId: 'SDE-LN-2004',
       appNo: 'APP-2026-004',
@@ -710,7 +715,7 @@ class InMemoryDemoLoanService implements LoanDataRepository {
       paidInstallments: 4,
     );
 
-    // Loan 5: Weekly Micro Loan — Missed 1st EMI Early Warning (Red / 35+ DPD)
+    // Loan 5: Weekly Micro Loan â€” Missed 1st EMI Early Warning (Red / 35+ DPD)
     seedLoan(
       loanId: 'SDE-LN-2005',
       appNo: 'APP-2026-005',
@@ -789,6 +794,11 @@ class InMemoryDemoLoanService implements LoanDataRepository {
   }
 
   @override
+  Future<void> updateLoanRecord(LoanModel loan) async {
+    await _repository.applyDelinquencyUpdate(loan: loan);
+    await refresh();
+  }
+
   Future<void> saveProduct(LoanProductModel product) async {
     _products[product.productId] = product;
   }
@@ -994,6 +1004,11 @@ class LoanPortfolioProvider extends ChangeNotifier {
 
   Future<void> saveBorrower(BorrowerModel borrower) async {
     await _repository.saveBorrower(borrower);
+    await refresh();
+  }
+
+  Future<void> updateLoanRecord(LoanModel loan) async {
+    await _repository.applyDelinquencyUpdate(loan: loan);
     await refresh();
   }
 
@@ -1359,3 +1374,4 @@ class LoanPortfolioProvider extends ChangeNotifier {
     return updatedCount;
   }
 }
+
