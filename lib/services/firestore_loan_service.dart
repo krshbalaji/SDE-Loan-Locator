@@ -1010,9 +1010,6 @@ class LoanPortfolioProvider extends ChangeNotifier {
     required LoanModel updatedLoan,
     required List<InstallmentModel> updatedInstallments,
     bool skipRefresh = false,
-    int initialPaidInstallments = 0,
-    int initialDpd = 0,
-    double? principalOutstandingOverride,
   }) async {
     await _repository.applyDelinquencyUpdate(
       updatedLoan: updatedLoan,
@@ -1078,8 +1075,38 @@ class LoanPortfolioProvider extends ChangeNotifier {
       firstDueDate: firstDue,
     );
 
+    var paidPrincipal = 0.0;
+    var paidInterest = 0.0;
+    final settledSchedule = <InstallmentModel>[];
+    for (var i = 0; i < schedule.length; i++) {
+      final inst = schedule[i];
+      if (i < initialPaidInstallments) {
+        paidPrincipal += inst.principalDue;
+        paidInterest += inst.interestDue;
+        settledSchedule.add(
+          inst.copyWith(
+            principalPaid: inst.principalDue,
+            interestPaid: inst.interestDue,
+            status: InstallmentStatus.paid,
+          ),
+        );
+      } else {
+        settledSchedule.add(inst);
+      }
+    }
+
     final totalInterest = IndianFormatters.roundPaise(
       schedule.fold<double>(0.0, (s, r) => s + r.interestDue),
+    );
+    final remPrincipal = (principalOutstandingOverride != null &&
+            principalOutstandingOverride > 0)
+        ? principalOutstandingOverride
+        : IndianFormatters.roundPaise(
+            (principalSanctioned - paidPrincipal)
+                .clamp(0.0, principalSanctioned),
+          );
+    final remInterest = IndianFormatters.roundPaise(
+      (totalInterest - paidInterest).clamp(0.0, totalInterest),
     );
 
     final loan = LoanModel(
@@ -1101,11 +1128,13 @@ class LoanPortfolioProvider extends ChangeNotifier {
       firstDueDate: firstDue,
       maturityDate: schedule.last.dueDate,
       scheduleVersion: 1,
-      principalOutstanding: principalSanctioned,
-      interestOutstanding: totalInterest,
+      principalOutstanding: remPrincipal,
+      interestOutstanding: remInterest,
       feesOutstanding: 0.0,
-      dpd: 0,
-      agingBucket: AgingBucket.current,
+      dpd: initialDpd > 0 ? initialDpd : 0,
+      agingBucket: initialDpd > 0
+          ? AgingBucket.fromDpd(initialDpd)
+          : AgingBucket.current,
       status: LoanStatus.active,
     );
 
@@ -1387,6 +1416,7 @@ class LoanPortfolioProvider extends ChangeNotifier {
     return updatedCount;
   }
 }
+
 
 
 

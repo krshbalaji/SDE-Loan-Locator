@@ -649,7 +649,7 @@ class ExcelImportService {
           ? DateTime(now.year, now.month - mob, now.day.clamp(1, 28))
           : now;
 
-      final createdLoan = await portfolio.originateNewLoan(
+      await portfolio.originateNewLoan(
         borrower: borrower,
         product: effectiveProduct,
         principalSanctioned: row.amount,
@@ -660,58 +660,10 @@ class ExcelImportService {
             row.applicationNo.isNotEmpty ? row.applicationNo : null,
         disbursementDate: disbursedOn,
         skipRefresh: true,
+        initialPaidInstallments: mob,
+        initialDpd: row.dpd ?? 0,
+        principalOutstandingOverride: row.principalOutstandingOverride,
       );
-
-      // Settle historical MOB installments + preserve imported DPD & POS in a single atomic update
-      final scheduleRows = portfolio.scheduleForLoan(
-        createdLoan.loanId,
-        version: createdLoan.scheduleVersion,
-      );
-      final updatedSchedule = <InstallmentModel>[];
-      var paidPrincipal = 0.0;
-      var paidInterest = 0.0;
-
-      for (var i = 0; i < mob && i < scheduleRows.length; i++) {
-        final inst = scheduleRows[i];
-        paidPrincipal += inst.principalDue;
-        paidInterest += inst.interestDue;
-        updatedSchedule.add(
-          inst.copyWith(
-            principalPaid: inst.principalDue,
-            interestPaid: inst.interestDue,
-            status: InstallmentStatus.paid,
-          ),
-        );
-      }
-
-      final importedDpd = row.dpd ?? 0;
-      final importedPos = row.principalOutstandingOverride;
-      final remainingPrincipal = (importedPos != null && importedPos > 0)
-          ? importedPos
-          : IndianFormatters.roundPaise(
-              (createdLoan.principalSanctioned - paidPrincipal)
-                  .clamp(0.0, createdLoan.principalSanctioned),
-            );
-      final remainingInterest = IndianFormatters.roundPaise(
-        (createdLoan.interestOutstanding - paidInterest)
-            .clamp(0.0, createdLoan.interestOutstanding),
-      );
-
-      if (mob > 0 || importedDpd > 0 || (importedPos != null && importedPos > 0)) {
-        final updatedLoan = createdLoan.copyWith(
-          principalOutstanding: remainingPrincipal,
-          interestOutstanding: remainingInterest,
-          dpd: importedDpd > 0 ? importedDpd : 0,
-          agingBucket: importedDpd > 0
-              ? AgingBucket.fromDpd(importedDpd)
-              : AgingBucket.current,
-        );
-        await portfolio.applyBatchImportState(
-          updatedLoan: updatedLoan,
-          updatedInstallments: updatedSchedule,
-          skipRefresh: true,
-        );
-      }
 
       imported++;
     }
@@ -773,6 +725,7 @@ class ExcelImportService {
     return double.tryParse(cleaned);
   }
 }
+
 
 
 
