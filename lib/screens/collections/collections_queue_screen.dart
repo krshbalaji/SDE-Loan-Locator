@@ -367,11 +367,23 @@ class _CollectionsQueueScreenState extends State<CollectionsQueueScreen> {
                                 ),
                               ],
                             ),
-                            if (openPtp.isNotEmpty || hasBrokenPtp) ...[
+                            if (loan.earlyWarningFlag || openPtp.isNotEmpty || hasBrokenPtp) ...[
                               const SizedBox(height: 6),
                               Wrap(
                                 spacing: 6,
                                 children: [
+                                  if (loan.earlyWarningFlag)
+                                    Chip(
+                                      label: const Text(
+                                        'EARLY WARNING',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      backgroundColor: Colors.deepOrange.shade700,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
                                   if (hasBrokenPtp)
                                     Chip(
                                       label: const Text(
@@ -449,5 +461,6 @@ class _CollectionsQueueScreenState extends State<CollectionsQueueScreen> {
     );
   }
 }
+
 
 
