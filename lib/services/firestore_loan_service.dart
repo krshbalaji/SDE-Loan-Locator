@@ -145,10 +145,6 @@ class FirestoreLoanService implements LoanDataRepository {
   }
 
   @override
-  Future<void> updateLoanRecord(LoanModel loan) async {
-    await _repository.applyDelinquencyUpdate(loan: loan);
-    await refresh();
-  }
 
   Future<void> saveProduct(LoanProductModel product) async {
     await _products
@@ -794,10 +790,6 @@ class InMemoryDemoLoanService implements LoanDataRepository {
   }
 
   @override
-  Future<void> updateLoanRecord(LoanModel loan) async {
-    await _repository.applyDelinquencyUpdate(loan: loan);
-    await refresh();
-  }
 
   Future<void> saveProduct(LoanProductModel product) async {
     _products[product.productId] = product;
@@ -1007,10 +999,6 @@ class LoanPortfolioProvider extends ChangeNotifier {
     await refresh();
   }
 
-  Future<void> updateLoanRecord(LoanModel loan) async {
-    await _repository.applyDelinquencyUpdate(loan: loan);
-    await refresh();
-  }
 
   Future<void> saveProduct(LoanProductModel product) async {
     await _repository.saveProduct(product);
@@ -1018,6 +1006,11 @@ class LoanPortfolioProvider extends ChangeNotifier {
   }
 
   /// Creates a new loan, its v1 amortization schedule, and initial immutable disbursement ledger entry.
+  Future<void> updateLoanRecord(LoanModel loan) async {
+    await _repository.applyDelinquencyUpdate(loan: loan);
+    await refresh();
+  }
+
   Future<LoanModel> originateNewLoan({
     required BorrowerModel borrower,
     required LoanProductModel product,
@@ -1374,4 +1367,5 @@ class LoanPortfolioProvider extends ChangeNotifier {
     return updatedCount;
   }
 }
+
 
