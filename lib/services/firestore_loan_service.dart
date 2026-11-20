@@ -1009,13 +1009,14 @@ class LoanPortfolioProvider extends ChangeNotifier {
   Future<void> applyBatchImportState({
     required LoanModel updatedLoan,
     required List<InstallmentModel> updatedInstallments,
+    bool skipRefresh = false,
   }) async {
     await _repository.applyDelinquencyUpdate(
       updatedLoan: updatedLoan,
       updatedInstallments: updatedInstallments,
       brokenPtpLogIds: const [],
     );
-    await refresh();
+    if (!skipRefresh) await refresh();
   }
 
   Future<void> updateLoanRecord(LoanModel loan) async {
@@ -1032,6 +1033,7 @@ class LoanPortfolioProvider extends ChangeNotifier {
     String? customLoanId,
     String? customApplicationNo,
     DateTime? disbursementDate,
+    bool skipRefresh = false,
   }) async {
     final disbursedOn = disbursementDate ?? DateTime.now();
     final loanId = (customLoanId != null && customLoanId.trim().isNotEmpty)
@@ -1121,7 +1123,7 @@ class LoanPortfolioProvider extends ChangeNotifier {
       initialSchedule: schedule,
       disbursementTxn: disbTxn,
     );
-    await refresh();
+    if (!skipRefresh) await refresh();
     return loan;
   }
 
@@ -1379,6 +1381,7 @@ class LoanPortfolioProvider extends ChangeNotifier {
     return updatedCount;
   }
 }
+
 
 
 

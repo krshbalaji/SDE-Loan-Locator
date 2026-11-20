@@ -625,7 +625,7 @@ class ExcelImportService {
           createdAt: now,
           updatedAt: now,
         );
-        await portfolio.saveBorrower(borrower);
+        await portfolio.saveBorrower(borrower, skipRefresh: true);
       }
 
       final effectiveProduct = row.customRoi != null && row.customRoi! > 0
@@ -660,6 +660,7 @@ class ExcelImportService {
         customApplicationNo:
             row.applicationNo.isNotEmpty ? row.applicationNo : null,
         disbursementDate: disbursedOn,
+        skipRefresh: true,
       );
 
       // Settle historical MOB installments + preserve imported DPD & POS in a single atomic update
@@ -709,10 +710,15 @@ class ExcelImportService {
         await portfolio.applyBatchImportState(
           updatedLoan: updatedLoan,
           updatedInstallments: updatedSchedule,
+          skipRefresh: true,
         );
       }
 
       imported++;
+    }
+
+    if (imported > 0) {
+      await portfolio.refresh();
     }
 
     return imported;
@@ -768,6 +774,7 @@ class ExcelImportService {
     return double.tryParse(cleaned);
   }
 }
+
 
 
 
