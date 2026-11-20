@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
 
-import '../engines/delinquency_engine.dart';
 import '../engines/geo_filter_engine.dart';
 import '../models/borrower_model.dart';
 import '../models/loan_model.dart';
@@ -689,7 +688,7 @@ class ExcelImportService {
         final updatedLoan = refreshedLoan.copyWith(
           dpd: importedDpd > 0 ? importedDpd : refreshedLoan.dpd,
           agingBucket: importedDpd > 0
-              ? DelinquencyEngine.bucketForDpd(importedDpd)
+              ? AgingBucket.fromDpd(importedDpd)
               : refreshedLoan.agingBucket,
           principalOutstanding: (importedPos != null && importedPos > 0)
               ? importedPos
@@ -754,3 +753,4 @@ class ExcelImportService {
     return double.tryParse(cleaned);
   }
 }
+
