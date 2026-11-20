@@ -1,4 +1,4 @@
-import 'dart:math';
+﻿import 'dart:math';
 
 import '../models/borrower_model.dart';
 import '../models/collection_log_model.dart';
@@ -6,7 +6,7 @@ import '../models/loan_model.dart';
 
 enum PinHealth {
   green('CURRENT', 'Current'),
-  amber('ATTENTION', 'DPD 1–30 / PTP Due'),
+  amber('ATTENTION', 'DPD 1â€“30 / PTP Due'),
   red('CRITICAL', 'DPD 31+ / Broken PTP');
 
   const PinHealth(this.code, this.label);
@@ -38,7 +38,7 @@ class GeoFilterEngine {
 
   static const String _base32 = '0123456789bcdefghjkmnpqrstuvwxyz';
 
-  /// Safely parses strings like `"9.9252, 78.1198"` or `"9.9252° N, 78.1198° E"`.
+  /// Safely parses strings like `"9.9252, 78.1198"` or `"9.9252Â° N, 78.1198Â° E"`.
   static ({double lat, double lng})? parseLatLong(String raw) {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) return null;
@@ -256,3 +256,4 @@ class GeoFilterEngine {
     return ordered;
   }
 }
+

@@ -450,7 +450,7 @@ class ExcelImportService {
       final isClosedOrRejected = rawStatus.contains('foreclos') ||
           rawStatus.contains('closed') ||
           rawStatus.contains('not sanction') ||
-          rawStatus.contains('reject');
+          rawStatus.contains('reject') || _safeStr(row, loanIdx).toLowerCase().contains('not aprove');
 
       final branch = branchIdx >= 0 ? _safeStr(row, branchIdx) : '';
       final pincode = pincodeIdx >= 0 ? _safeStr(row, pincodeIdx) : '';
@@ -753,4 +753,5 @@ class ExcelImportService {
     return double.tryParse(cleaned);
   }
 }
+
 
