@@ -1006,6 +1006,18 @@ class LoanPortfolioProvider extends ChangeNotifier {
   }
 
   /// Creates a new loan, its v1 amortization schedule, and initial immutable disbursement ledger entry.
+  Future<void> applyBatchImportState({
+    required LoanModel updatedLoan,
+    required List<InstallmentScheduleModel> updatedInstallments,
+  }) async {
+    await _repository.applyDelinquencyUpdate(
+      updatedLoan: updatedLoan,
+      updatedInstallments: updatedInstallments,
+      brokenPtpLogIds: const [],
+    );
+    await refresh();
+  }
+
   Future<void> updateLoanRecord(LoanModel loan) async {
     await _repository.applyDelinquencyUpdate(updatedLoan: loan, updatedInstallments: const [], brokenPtpLogIds: const []);
     await refresh();
@@ -1367,6 +1379,7 @@ class LoanPortfolioProvider extends ChangeNotifier {
     return updatedCount;
   }
 }
+
 
 
 

@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 
 import '../engines/geo_filter_engine.dart';
 import '../models/borrower_model.dart';
+import '../models/installment_schedule_model.dart';
 import '../models/loan_model.dart';
 import '../models/loan_product_model.dart';
 import '../models/transaction_model.dart';
@@ -662,39 +663,55 @@ class ExcelImportService {
         disbursementDate: disbursedOn,
       );
 
-      if (mob > 0) {
-        final scheduleRows = portfolio.scheduleForLoan(
-          createdLoan.loanId,
-          version: createdLoan.scheduleVersion,
+      // Settle historical MOB installments + preserve imported DPD & POS in a single atomic update
+      final scheduleRows = portfolio.scheduleForLoan(
+        createdLoan.loanId,
+        version: createdLoan.scheduleVersion,
+      );
+      final updatedSchedule = <InstallmentScheduleModel>[];
+      var paidPrincipal = 0.0;
+      var paidInterest = 0.0;
+
+      for (var i = 0; i < mob && i < scheduleRows.length; i++) {
+        final inst = scheduleRows[i];
+        paidPrincipal += inst.principalDue;
+        paidInterest += inst.interestDue;
+        updatedSchedule.add(
+          inst.copyWith(
+            principalPaid: inst.principalDue,
+            interestPaid: inst.interestDue,
+            status: InstallmentStatus.paid,
+            paidDate: inst.dueDate,
+          ),
         );
-        for (var i = 0; i < mob && i < scheduleRows.length; i++) {
-          final inst = scheduleRows[i];
-          await portfolio.recordPayment(
-            loanId: createdLoan.loanId,
-            amount: inst.totalDue,
-            paymentMode: PaymentMode.enach,
-            referenceNo: 'HIST-${createdLoan.loanId}-M${inst.installmentNo}',
-            collectedByUid: importedByUid,
-            notes: 'Historical installment #${inst.installmentNo} imported via MOB',
-          );
-        }
       }
 
-      // Preserve imported DPD & POS overrides from NBFC master dataset
       final importedDpd = row.dpd ?? 0;
       final importedPos = row.principalOutstandingOverride;
-      if (importedDpd > 0 || (importedPos != null && importedPos > 0)) {
-        final refreshedLoan = portfolio.loanById(createdLoan.loanId) ?? createdLoan;
-        final updatedLoan = refreshedLoan.copyWith(
-          dpd: importedDpd > 0 ? importedDpd : refreshedLoan.dpd,
+      final remainingPrincipal = (importedPos != null && importedPos > 0)
+          ? importedPos
+          : IndianFormatters.roundPaise(
+              (createdLoan.principalSanctioned - paidPrincipal)
+                  .clamp(0.0, createdLoan.principalSanctioned),
+            );
+      final remainingInterest = IndianFormatters.roundPaise(
+        (createdLoan.interestOutstanding - paidInterest)
+            .clamp(0.0, createdLoan.interestOutstanding),
+      );
+
+      if (mob > 0 || importedDpd > 0 || (importedPos != null && importedPos > 0)) {
+        final updatedLoan = createdLoan.copyWith(
+          principalOutstanding: remainingPrincipal,
+          interestOutstanding: remainingInterest,
+          dpd: importedDpd > 0 ? importedDpd : 0,
           agingBucket: importedDpd > 0
               ? AgingBucket.fromDpd(importedDpd)
-              : refreshedLoan.agingBucket,
-          principalOutstanding: (importedPos != null && importedPos > 0)
-              ? importedPos
-              : refreshedLoan.principalOutstanding,
+              : AgingBucket.current,
         );
-        await portfolio.updateLoanRecord(updatedLoan);
+        await portfolio.applyBatchImportState(
+          updatedLoan: updatedLoan,
+          updatedInstallments: updatedSchedule,
+        );
       }
 
       imported++;
@@ -753,5 +770,6 @@ class ExcelImportService {
     return double.tryParse(cleaned);
   }
 }
+
 
 
