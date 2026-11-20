@@ -994,9 +994,9 @@ class LoanPortfolioProvider extends ChangeNotifier {
     return 'SDE-LN-${maxNum + 1}';
   }
 
-  Future<void> saveBorrower(BorrowerModel borrower) async {
+  Future<void> saveBorrower(BorrowerModel borrower, {bool skipRefresh = false}) async {
     await _repository.saveBorrower(borrower);
-    await refresh();
+    if (!skipRefresh) await refresh();
   }
 
 
@@ -1010,6 +1010,9 @@ class LoanPortfolioProvider extends ChangeNotifier {
     required LoanModel updatedLoan,
     required List<InstallmentModel> updatedInstallments,
     bool skipRefresh = false,
+    int initialPaidInstallments = 0,
+    int initialDpd = 0,
+    double? principalOutstandingOverride,
   }) async {
     await _repository.applyDelinquencyUpdate(
       updatedLoan: updatedLoan,
@@ -1034,6 +1037,9 @@ class LoanPortfolioProvider extends ChangeNotifier {
     String? customApplicationNo,
     DateTime? disbursementDate,
     bool skipRefresh = false,
+    int initialPaidInstallments = 0,
+    int initialDpd = 0,
+    double? principalOutstandingOverride,
   }) async {
     final disbursedOn = disbursementDate ?? DateTime.now();
     final loanId = (customLoanId != null && customLoanId.trim().isNotEmpty)
@@ -1120,7 +1126,7 @@ class LoanPortfolioProvider extends ChangeNotifier {
 
     await _repository.originateLoan(
       loan: loan,
-      initialSchedule: schedule,
+      initialSchedule: settledSchedule,
       disbursementTxn: disbTxn,
     );
     if (!skipRefresh) await refresh();
@@ -1381,6 +1387,7 @@ class LoanPortfolioProvider extends ChangeNotifier {
     return updatedCount;
   }
 }
+
 
 
 

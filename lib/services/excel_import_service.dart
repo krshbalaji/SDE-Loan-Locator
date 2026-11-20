@@ -6,7 +6,6 @@ import 'package:file_picker/file_picker.dart';
 
 import '../engines/geo_filter_engine.dart';
 import '../models/borrower_model.dart';
-import '../models/installment_model.dart';
 import '../models/loan_model.dart';
 import '../models/loan_product_model.dart';
 import '../utils/indian_formatters.dart';
@@ -774,6 +773,7 @@ class ExcelImportService {
     return double.tryParse(cleaned);
   }
 }
+
 
 
 
