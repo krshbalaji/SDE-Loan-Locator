@@ -160,9 +160,7 @@ class FirestoreLoanService implements LoanDataRepository {
   }) async {
     final batch = _db.batch();
     batch.set(_loans.doc(loan.loanId), _loanToFirestore(loan));
-    for (final row in initialSchedule) {
-      batch.set(_schedule.doc(row.installmentId), _installmentToFirestore(row));
-    }
+    // Schedule rows are deterministically derived in-memory from loan terms + transactions
     batch.set(
       _transactions.doc(disbursementTxn.txnId),
       _txnToFirestore(disbursementTxn),
@@ -1416,6 +1414,7 @@ class LoanPortfolioProvider extends ChangeNotifier {
     return updatedCount;
   }
 }
+
 
 
 
