@@ -6,7 +6,7 @@ import 'package:file_picker/file_picker.dart';
 
 import '../engines/geo_filter_engine.dart';
 import '../models/borrower_model.dart';
-import '../models/installment_schedule_model.dart';
+import '../models/installment_model.dart';
 import '../models/loan_model.dart';
 import '../models/loan_product_model.dart';
 import '../models/transaction_model.dart';
@@ -668,7 +668,7 @@ class ExcelImportService {
         createdLoan.loanId,
         version: createdLoan.scheduleVersion,
       );
-      final updatedSchedule = <InstallmentScheduleModel>[];
+      final updatedSchedule = <InstallmentModel>[];
       var paidPrincipal = 0.0;
       var paidInterest = 0.0;
 
@@ -681,7 +681,6 @@ class ExcelImportService {
             principalPaid: inst.principalDue,
             interestPaid: inst.interestDue,
             status: InstallmentStatus.paid,
-            paidDate: inst.dueDate,
           ),
         );
       }
@@ -770,6 +769,7 @@ class ExcelImportService {
     return double.tryParse(cleaned);
   }
 }
+
 
 
 
