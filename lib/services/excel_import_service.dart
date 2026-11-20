@@ -9,7 +9,6 @@ import '../models/borrower_model.dart';
 import '../models/installment_model.dart';
 import '../models/loan_model.dart';
 import '../models/loan_product_model.dart';
-import '../models/transaction_model.dart';
 import '../utils/indian_formatters.dart';
 import 'firestore_loan_service.dart';
 
@@ -769,6 +768,7 @@ class ExcelImportService {
     return double.tryParse(cleaned);
   }
 }
+
 
 
 
