@@ -1007,7 +1007,7 @@ class LoanPortfolioProvider extends ChangeNotifier {
 
   /// Creates a new loan, its v1 amortization schedule, and initial immutable disbursement ledger entry.
   Future<void> updateLoanRecord(LoanModel loan) async {
-    await _repository.applyDelinquencyUpdate(loan: loan);
+    await _repository.applyDelinquencyUpdate(updatedLoan: loan, updatedInstallments: const [], brokenPtpLogIds: const []);
     await refresh();
   }
 
@@ -1367,5 +1367,6 @@ class LoanPortfolioProvider extends ChangeNotifier {
     return updatedCount;
   }
 }
+
 
 
