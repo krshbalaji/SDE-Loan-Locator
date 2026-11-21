@@ -151,3 +151,73 @@ class LoanProductModel {
         'is_active': isActive,
       };
 }
+
+/// Ready-to-use default NBFC product templates for Housing Finance, LAP,
+/// and collections workflows. Use `.copyWith(...)` to customize per deal/branch.
+class DefaultLoanProducts {
+  static const List<LoanProductModel> catalog = [
+    LoanProductModel(
+      productId: 'PROD_HF_HL',
+      productName: 'Housing Finance - Home Loan',
+      interestMethod: InterestMethod.reducingBalance,
+      annualInterestRate: 9.5,
+      repaymentFrequency: RepaymentFrequency.monthly,
+      maxTenureInstallments: 240,
+      processingFeePct: 1.0,
+      gstRatePct: 18.0,
+      gracePeriodDays: 5,
+      lateFeeType: LateFeeType.percentOverdue,
+      lateFeeValue: 2.0,
+      atRiskDpdThreshold: 30,
+      isActive: true,
+    ),
+    LoanProductModel(
+      productId: 'PROD_LAP_STD',
+      productName: 'Loan Against Property - Standard LAP',
+      interestMethod: InterestMethod.reducingBalance,
+      annualInterestRate: 12.0,
+      repaymentFrequency: RepaymentFrequency.monthly,
+      maxTenureInstallments: 120,
+      processingFeePct: 1.5,
+      gstRatePct: 18.0,
+      gracePeriodDays: 3,
+      lateFeeType: LateFeeType.percentOverdue,
+      lateFeeValue: 2.0,
+      atRiskDpdThreshold: 30,
+      isActive: true,
+    ),
+    LoanProductModel(
+      productId: 'PROD_LAP_MICRO',
+      productName: 'Micro-LAP - Small Business Term',
+      interestMethod: InterestMethod.reducingBalance,
+      annualInterestRate: 15.5,
+      repaymentFrequency: RepaymentFrequency.monthly,
+      maxTenureInstallments: 60,
+      processingFeePct: 2.0,
+      gstRatePct: 18.0,
+      gracePeriodDays: 3,
+      lateFeeType: LateFeeType.percentOverdue,
+      lateFeeValue: 2.5,
+      atRiskDpdThreshold: 15,
+      isActive: true,
+    ),
+    LoanProductModel(
+      productId: 'PROD_COLL_DAILY',
+      productName: 'Short-Cycle Collections Facility',
+      interestMethod: InterestMethod.flatRate,
+      annualInterestRate: 18.0,
+      repaymentFrequency: RepaymentFrequency.daily,
+      maxTenureInstallments: 180,
+      processingFeePct: 2.0,
+      gstRatePct: 18.0,
+      gracePeriodDays: 1,
+      lateFeeType: LateFeeType.flatInr,
+      lateFeeValue: 250.0,
+      atRiskDpdThreshold: 7,
+      isActive: true,
+    ),
+  ];
+
+  static LoanProductModel get primaryDefault => catalog[1];
+}
+
