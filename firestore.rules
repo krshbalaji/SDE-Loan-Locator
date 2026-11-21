@@ -45,10 +45,6 @@ service cloud.firestore {
       return isActiveUser() && effectiveRole() in ['SUPER_ADMIN', 'CEO', 'MD', 'MASTER'];
     }
 
-    function isAreaOrAbove() {
-      return isActiveUser() && effectiveRole() in ['SUPER_ADMIN', 'CEO', 'MD', 'MASTER', 'AREA_MANAGER'];
-    }
-
     function isAdminOrAbove() {
       return isActiveUser() && effectiveRole() in ['SUPER_ADMIN', 'CEO', 'MD', 'MASTER', 'AREA_MANAGER', 'BRANCH_MANAGER', 'COLLECTION_MANAGER', 'ADMIN'];
     }
@@ -104,3 +100,4 @@ service cloud.firestore {
     }
   }
 }
+

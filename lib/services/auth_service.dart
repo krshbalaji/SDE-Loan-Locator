@@ -17,7 +17,7 @@ class AuthService extends ChangeNotifier {
   List<AppUser> _staffDirectory = [];
   bool _isLoading = false;
   String? _errorMessage;
-  bool _demoLoginEnabled = true;
+  late bool _demoLoginEnabled = !useFirebase;
   bool _isDemoSession = false;
   bool _isInitializing = true;
 
@@ -172,7 +172,7 @@ class AuthService extends ChangeNotifier {
         .snapshots()
         .listen((cfg) {
       if (cfg.exists && cfg.data() != null && cfg.data()!.containsKey('demo_login_enabled')) {
-        final next = cfg.data()!['demo_login_enabled'] as bool? ?? true;
+        final next = cfg.data()!['demo_login_enabled'] as bool? ?? false;
         if (_demoLoginEnabled != next) {
           _demoLoginEnabled = next;
           if (!next && _isDemoSession) {
@@ -195,7 +195,9 @@ class AuthService extends ChangeNotifier {
           .doc('settings')
           .get(const GetOptions(source: Source.serverAndCache));
       if (cfg.exists && cfg.data() != null && cfg.data()!.containsKey('demo_login_enabled')) {
-        _demoLoginEnabled = cfg.data()!['demo_login_enabled'] as bool? ?? true;
+        _demoLoginEnabled = cfg.data()!['demo_login_enabled'] as bool? ?? false;
+      } else {
+        _demoLoginEnabled = false;
       }
     } catch (_) {}
     notifyListeners();
@@ -441,6 +443,12 @@ class AuthService extends ChangeNotifier {
   }
 
   void signInAsDemoRole(UserRole role) {
+    if (useFirebase && !_demoLoginEnabled) {
+      _errorMessage = 'Demo Sandbox has been disabled by Super Admin.';
+      notifyListeners();
+      return;
+    }
+    _isDemoSession = true;
     _errorMessage = null;
     _currentUser = allStaff.firstWhere(
       (u) => u.role == role,
@@ -565,6 +573,7 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 }
+
 
 
 
