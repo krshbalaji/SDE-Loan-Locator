@@ -121,6 +121,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /maker_checker_requests/{reqId} {
+      allow read: if isActiveUser();
+      allow create: if isActiveUser();
+      allow update: if isAdminOrAbove();
+      allow delete: if false;
+    }
+
     match /audit_logs/{logId} {
       allow read: if isExecutive();
       allow create: if isActiveUser();
@@ -128,3 +135,4 @@ service cloud.firestore {
     }
   }
 }
+
