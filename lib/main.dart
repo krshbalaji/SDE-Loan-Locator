@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'firebase/firebase_options.dart';
+import 'services/audit_service.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_loan_service.dart';
 import 'screens/auth/login_screen.dart';
@@ -49,8 +50,12 @@ class LoanLocatorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider<AuthService>(
-          create: (_) => AuthService(useFirebase: useFirebase)..init(),
+        ChangeNotifierProvider<AuditService>(
+          create: (_) => AuditService(useFirebase: useFirebase),
+        ),
+        ChangeNotifierProxyProvider<AuditService, AuthService>(
+          create: (ctx) => AuthService(useFirebase: useFirebase, auditService: ctx.read<AuditService>())..init(),
+          update: (ctx, audit, prev) => prev ?? AuthService(useFirebase: useFirebase, auditService: audit)..init(),
         ),
         ChangeNotifierProvider<LoanPortfolioProvider>(
           create: (_) => LoanPortfolioProvider(
@@ -124,3 +129,4 @@ class _AuthGateState extends State<_AuthGate> {
     return const AgentHomeScreen();
   }
 }
+

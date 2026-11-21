@@ -3,15 +3,18 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
+import 'audit_service.dart';
+
 import '../models/borrower_model.dart';
 import '../models/loan_model.dart';
 import '../models/user_model.dart';
 
 /// Role-Based Access Control & In-App Staff Provisioning service.
 class AuthService extends ChangeNotifier {
-  AuthService({required this.useFirebase});
+  AuthService({required this.useFirebase, AuditService? auditService}) : _auditService = auditService;
 
   final bool useFirebase;
+  final AuditService? _auditService;
 
   AppUser? _currentUser;
   List<AppUser> _staffDirectory = [];
@@ -221,6 +224,13 @@ class AuthService extends ChangeNotifier {
             'demo_login_enabled': enabled,
             'updated_at': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
+      await _auditService?.record(
+        actor: _currentUser,
+        action: enabled ? 'ENABLE_DEMO_SANDBOX' : 'DISABLE_DEMO_SANDBOX',
+        targetType: 'app_config',
+        targetId: 'settings',
+        details: 'demo_login_enabled=',
+      );
       return null;
     } catch (e) {
       _demoLoginEnabled = previous;
@@ -406,6 +416,13 @@ class AuthService extends ChangeNotifier {
           .set(appUser.toMap());
 
       await secondaryAuth.signOut();
+      await _auditService?.record(
+        actor: creator,
+        action: 'CREATE_STAFF_USER',
+        targetType: 'users',
+        targetId: newUid,
+        details: 'Created  () with  features',
+      );
       await refreshStaffDirectory();
       return appUser;
     } finally {
@@ -437,6 +454,13 @@ class AuthService extends ChangeNotifier {
           .collection('users')
           .doc(updated.uid)
           .set(updated.toMap(), SetOptions(merge: true));
+      await _auditService?.record(
+        actor: _currentUser,
+        action: 'UPDATE_STAFF_USER',
+        targetType: 'users',
+        targetId: updated.uid,
+        details: 'role=, active=, features=',
+      );
     } catch (_) {
       // Keep local state responsive even if Firestore rules/network reject
     }
@@ -573,6 +597,9 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 }
+
+
+
 
 
 

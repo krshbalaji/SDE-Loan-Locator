@@ -12,21 +12,22 @@ service cloud.firestore {
         request.auth.token.email.matches('(?i).*sar[ao]devi.*');
     }
 
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
     function userDocExists() {
       return isSignedIn() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function roleFromDoc() {
-      return userDocExists()
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
-        : '';
+      return userDocExists() ? userDoc().role : '';
     }
 
     function isActiveUser() {
       return isSarodeviAdmin() ||
-        (userDocExists() &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.is_active != false);
+        (userDocExists() && userDoc().is_active != false);
     }
 
     function effectiveRole() {
@@ -46,7 +47,24 @@ service cloud.firestore {
     }
 
     function isAdminOrAbove() {
-      return isActiveUser() && effectiveRole() in ['SUPER_ADMIN', 'CEO', 'MD', 'MASTER', 'AREA_MANAGER', 'BRANCH_MANAGER', 'COLLECTION_MANAGER', 'ADMIN'];
+      return isActiveUser() && effectiveRole() in [
+        'SUPER_ADMIN',
+        'CEO',
+        'MD',
+        'MASTER',
+        'AREA_MANAGER',
+        'BRANCH_MANAGER',
+        'COLLECTION_MANAGER',
+        'ADMIN'
+      ];
+    }
+
+    function hasFeature(featureCode) {
+      return isExecutive() ||
+        (isActiveUser() &&
+          userDocExists() &&
+          userDoc().allowed_features is list &&
+          featureCode in userDoc().allowed_features);
     }
 
     match /app_config/{docId} {
@@ -56,8 +74,10 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && (request.auth.uid == userId || isAdminOrAbove());
-      allow update: if isSignedIn() && (request.auth.uid == userId || isAdminOrAbove());
+      allow create: if isSignedIn() &&
+        (request.auth.uid == userId || (isAdminOrAbove() && hasFeature('TEAM_AND_PERMISSIONS')));
+      allow update: if isSignedIn() &&
+        (request.auth.uid == userId || (isAdminOrAbove() && hasFeature('TEAM_AND_PERMISSIONS')));
       allow delete: if isSuperAdmin();
     }
 
@@ -68,36 +88,43 @@ service cloud.firestore {
 
     match /borrowers/{borrowerId} {
       allow read: if isActiveUser();
-      allow create, update: if isActiveUser() &&
-        (isAdminOrAbove() || resource == null || resource.data.assigned_agent_id == request.auth.uid);
+      allow create: if hasFeature('LOAN_ORIGINATION') || hasFeature('EXCEL_IMPORT_EXPORT');
+      allow update: if isActiveUser() &&
+        (isAdminOrAbove() || resource.data.assigned_agent_id == request.auth.uid);
       allow delete: if isExecutive();
     }
 
     match /loans/{loanId} {
       allow read: if isActiveUser();
-      allow create, update: if isActiveUser() &&
-        (isAdminOrAbove() || resource == null || resource.data.assigned_agent_id == request.auth.uid);
+      allow create: if hasFeature('LOAN_ORIGINATION') || hasFeature('EXCEL_IMPORT_EXPORT');
+      allow update: if isActiveUser() &&
+        (isAdminOrAbove() || resource.data.assigned_agent_id == request.auth.uid);
       allow delete: if isExecutive();
     }
 
     match /installment_schedule/{installmentId} {
       allow read: if isActiveUser();
-      allow create, update: if isActiveUser();
+      allow create, update: if hasFeature('LOAN_ORIGINATION') || hasFeature('PAYMENT_COLLECTION') || hasFeature('EXCEL_IMPORT_EXPORT');
       allow delete: if isExecutive();
     }
 
     match /transactions/{txnId} {
       allow read: if isActiveUser();
-      allow create: if isActiveUser();
+      allow create: if hasFeature('PAYMENT_COLLECTION');
       allow update, delete: if false;
     }
 
     match /collection_logs/{logId} {
       allow read: if isActiveUser();
-      allow create: if isActiveUser();
+      allow create: if hasFeature('COLLECTIONS_QUEUE') || hasFeature('PAYMENT_COLLECTION');
       allow update: if isAdminOrAbove();
       allow delete: if false;
     }
+
+    match /audit_logs/{logId} {
+      allow read: if isExecutive();
+      allow create: if isActiveUser();
+      allow update, delete: if false;
+    }
   }
 }
-
