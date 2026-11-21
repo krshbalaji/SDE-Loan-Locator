@@ -61,6 +61,8 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
     );
     if (confirmed != true || !mounted) return;
     repo.clearAllData();
+    await portfolio.refresh();
+    if (!mounted) return;
     setState(() => _parseResult = null);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -315,3 +317,5 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
     );
   }
 }
+
+

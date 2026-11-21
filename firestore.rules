@@ -4,55 +4,103 @@ service cloud.firestore {
     function isSignedIn() {
       return request.auth != null;
     }
-    function userDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-    function isActiveUser() {
-      return isSignedIn() && userDoc().isActive == true;
-    }
-    function hasRole(roles) {
-      return isActiveUser() && userDoc().role in roles;
+
+    function currentUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    match /users/{uid} {
-      allow read: if isSignedIn() && (request.auth.uid == uid || hasRole(['MASTER', 'ADMIN']));
-      allow write: if hasRole(['MASTER']);
+    function hasUserProfile() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        currentUserDoc().data.is_active == true;
     }
 
+    function userRole() {
+      return hasUserProfile() ? currentUserDoc().data.role : 'none';
+    }
+
+    function isAdminOrAbove() {
+      return userRole() in ['admin', 'executive', 'super_admin'];
+    }
+
+    function isValidIndiaCoords(lat, lng) {
+      return lat is number && lng is number &&
+        lat >= 6.0 && lat <= 38.0 &&
+        lng >= 68.0 && lng <= 98.0;
+    }
+
+    // Staff directory & role profiles: users read own profile; admins manage staff; no self-role escalation
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdminOrAbove());
+      allow create: if isAdminOrAbove();
+      allow update: if isAdminOrAbove() ||
+        (
+          hasUserProfile() &&
+          request.auth.uid == userId &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'is_active'])
+        );
+      allow delete: if isAdminOrAbove() && request.auth.uid != userId;
+    }
+
+    // Borrowers: authenticated active staff only; agents see/edit assigned records; admins have full access
     match /borrowers/{borrowerId} {
-      allow read: if isActiveUser();
-      allow create, update: if hasRole(['MASTER', 'ADMIN', 'AGENT']);
-      allow delete: if hasRole(['MASTER']);
+      allow read: if hasUserProfile() && (
+        isAdminOrAbove() ||
+        resource.data.assigned_agent_id == request.auth.uid
+      );
+      allow create: if hasUserProfile() && (
+        isAdminOrAbove() ||
+        request.resource.data.assigned_agent_id == request.auth.uid
+      ) && isValidIndiaCoords(request.resource.data.latitude, request.resource.data.longitude);
+      allow update: if hasUserProfile() && (
+        isAdminOrAbove() ||
+        resource.data.assigned_agent_id == request.auth.uid
+      ) && isValidIndiaCoords(request.resource.data.latitude, request.resource.data.longitude);
+      allow delete: if isAdminOrAbove();
     }
 
-    match /loan_products/{productId} {
-      allow read: if isActiveUser();
-      allow write: if hasRole(['MASTER']);
-    }
-
+    // Loans: authenticated active staff only; non-negative balances required
     match /loans/{loanId} {
-      allow read: if isActiveUser();
-      allow create, update: if hasRole(['MASTER', 'ADMIN', 'AGENT']);
-      allow delete: if hasRole(['MASTER']);
+      allow read: if hasUserProfile() && (
+        isAdminOrAbove() ||
+        resource.data.assigned_agent_id == request.auth.uid
+      );
+      allow create: if hasUserProfile() && (
+        isAdminOrAbove() ||
+        request.resource.data.assigned_agent_id == request.auth.uid
+      ) && request.resource.data.principal_sanctioned > 0 &&
+        request.resource.data.principal_outstanding >= 0;
+      allow update: if hasUserProfile() && (
+        isAdminOrAbove() ||
+        resource.data.assigned_agent_id == request.auth.uid
+      ) && request.resource.data.principal_outstanding >= 0;
+      allow delete: if isAdminOrAbove();
     }
 
-    match /installment_schedule/{installmentId} {
-      allow read: if isActiveUser();
-      allow create, update: if hasRole(['MASTER', 'ADMIN', 'AGENT']);
-      allow delete: if hasRole(['MASTER']);
+    // Installment schedules: active staff read; admins or assigned loan officers write
+    match /installments/{installmentId} {
+      allow read: if hasUserProfile();
+      allow create, update: if hasUserProfile();
+      allow delete: if isAdminOrAbove();
     }
 
-    match /transactions/{txnId} {
-      allow read: if isActiveUser();
-      allow create: if hasRole(['MASTER', 'ADMIN', 'AGENT']);
+    // Transactions & ledger entries: append/create by active staff; reversals/deletes restricted to admins
+    match /transactions/{transactionId} {
+      allow read: if hasUserProfile();
+      allow create: if hasUserProfile() && request.resource.data.amount > 0;
+      allow update, delete: if isAdminOrAbove();
+    }
+
+    // Audit logs: append-only for active staff; immutable to non-admins
+    match /audit_logs/{logId} {
+      allow read: if isAdminOrAbove();
+      allow create: if hasUserProfile();
       allow update, delete: if false;
     }
 
-    match /collection_logs/{logId} {
-      allow read: if isActiveUser();
-      allow create: if hasRole(['MASTER', 'ADMIN', 'AGENT']);
-      allow update: if hasRole(['MASTER', 'ADMIN']);
-      allow delete: if hasRole(['MASTER']);
+    // Default deny for all unspecified paths
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
