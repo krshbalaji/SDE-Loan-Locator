@@ -474,6 +474,18 @@ class _MasterDashboardState extends State<MasterDashboard> {
           },
         ),
         const SizedBox(height: 12),
+        PortfolioVisualAnalyticsPanel(
+          loans: portfolio.loans,
+          borrowersById: { for (final b in portfolio.borrowers) b.borrowerId: b },
+          products: portfolio.products,
+          selectedSliceKey: _visualSliceKey,
+          onSelectSlice: (dim, key) {
+            setState(() {
+              _visualDimension = key == null ? null : dim;
+              _visualSliceKey = key;
+            });
+          },
+        ),
         Builder(
           builder: (context) {
             final borrowerMap = { for (final b in portfolio.borrowers) b.borrowerId: b };
@@ -767,6 +779,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
     );
   }
 }
+
 
 
 
