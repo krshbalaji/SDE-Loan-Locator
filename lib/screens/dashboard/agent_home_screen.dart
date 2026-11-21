@@ -229,6 +229,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
       LoanListScreen(agentIdFilter: user.uid),
     ];
 
+    // PortfolioIntelligencePanel available for agent beat/portfolio view
     return Scaffold(
       appBar: AppBar(
         title: Text('Field Officer • ${user.displayName.split(" (").first}'),
@@ -270,4 +271,6 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
     );
   }
 }
+
+
 

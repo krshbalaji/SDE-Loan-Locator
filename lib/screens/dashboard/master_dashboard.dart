@@ -11,6 +11,7 @@ import '../../services/location_service.dart';
 import '../../services/pdf_export_service.dart';
 import '../../utils/indian_formatters.dart';
 import '../../widgets/aging_bucket_chart.dart';
+import '../../widgets/portfolio_intelligence_panel.dart';
 import '../admin/excel_import_screen.dart';
 import '../admin/team_allocation_screen.dart';
 import '../collections/collections_queue_screen.dart';
@@ -439,7 +440,9 @@ class _MasterDashboardState extends State<MasterDashboard> {
           ],
         ),
         const SizedBox(height: 14),
-        AgingBucketChart(breakdown: kpi.agingBreakdown),
+        PortfolioIntelligencePanel(loans: portfolio.loans, borrowers: portfolio.borrowers),
+            const SizedBox(height: 8),
+            AgingBucketChart(breakdown: kpi.agingBreakdown),
         const SizedBox(height: 14),
         Card(
           child: Padding(
@@ -662,6 +665,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
     );
   }
 }
+
 
 
 
