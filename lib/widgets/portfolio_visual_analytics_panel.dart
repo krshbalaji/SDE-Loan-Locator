@@ -1,8 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../models/borrower_model.dart';
-import '../models/loan_product_model.dart';
 import '../models/loan_model.dart';
+import '../models/loan_product_model.dart';
 import '../utils/indian_formatters.dart';
 
 enum AnalyticsDimension {
@@ -70,6 +72,16 @@ class _PortfolioVisualAnalyticsPanelState
     extends State<PortfolioVisualAnalyticsPanel> {
   AnalyticsDimension _dimension = AnalyticsDimension.branch;
 
+  static const List<Color> _palette = [
+    Color(0xFF2563EB),
+    Color(0xFF0D9488),
+    Color(0xFFD97706),
+    Color(0xFF7C3AED),
+    Color(0xFFDB2777),
+    Color(0xFF4F46E5),
+    Color(0xFF059669),
+  ];
+
   List<SliceMetric> _computeMetrics() {
     final grouped = <String, _MutableBucket>{};
 
@@ -128,8 +140,12 @@ class _PortfolioVisualAnalyticsPanelState
         case AnalyticsDimension.employee:
           return widget.employeeNameResolver?.call(key) ?? key;
         case AnalyticsDimension.product:
-          if (widget.productNameResolver != null) return widget.productNameResolver!(key);
-          for (final p in widget.products) { if (p.productId == key) return p.productName; }
+          if (widget.productNameResolver != null) {
+            return widget.productNameResolver!(key);
+          }
+          for (final p in widget.products) {
+            if (p.productId == key) return p.productName;
+          }
           return key;
         default:
           return key;
@@ -174,11 +190,13 @@ class _PortfolioVisualAnalyticsPanelState
         : metrics.map((m) => m.posAmount).reduce((a, b) => a > b ? a : b);
 
     final theme = Theme.of(context);
+    final overallNpaPct =
+        totalPos <= 0 ? 0.0 : (totalNpaPos / totalPos) * 100.0;
 
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         side: BorderSide(color: theme.colorScheme.outlineVariant),
       ),
       child: Padding(
@@ -188,26 +206,48 @@ class _PortfolioVisualAnalyticsPanelState
           children: [
             Row(
               children: [
-                Icon(Icons.bar_chart_rounded, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer.withAlpha(140),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.donut_large_rounded,
+                    color: theme.colorScheme.primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    'Visual Portfolio Breakdown',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Visual Portfolio Breakdown',
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        'Tap any slice or bar to cross-filter portfolio & intelligence',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 if (widget.selectedSliceKey != null)
-                  TextButton.icon(
+                  FilledButton.tonalIcon(
                     onPressed: () => widget.onSelectSlice(_dimension, null),
                     icon: const Icon(Icons.filter_alt_off, size: 16),
                     label: const Text('Clear Slice'),
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Wrap(
-              spacing: 12,
+              spacing: 10,
               runSpacing: 6,
               children: [
                 _SummaryPill(
@@ -215,8 +255,9 @@ class _PortfolioVisualAnalyticsPanelState
                   value: IndianFormatters.formatInrCompact(totalPos),
                 ),
                 _SummaryPill(
-                  label: '90+ DPD NPA POS',
-                  value: IndianFormatters.formatInrCompact(totalNpaPos),
+                  label: '90+ DPD NPA',
+                  value:
+                      '${IndianFormatters.formatInrCompact(totalNpaPos)} (${overallNpaPct.toStringAsFixed(1)}%)',
                   isAlert: totalNpaPos > 0,
                 ),
                 _SummaryPill(
@@ -249,115 +290,347 @@ class _PortfolioVisualAnalyticsPanelState
                 padding: EdgeInsets.symmetric(vertical: 20),
                 child: Text('No loans match the current filter criteria.'),
               )
-            else
-              ...metrics.map((item) {
-                final isSelected = widget.selectedSliceKey == item.key;
-                final ratio = maxPos <= 0
-                    ? 0.0
-                    : (item.posAmount / maxPos).clamp(0.0, 1.0);
-                final npaRatioInBar = item.posAmount <= 0
-                    ? 0.0
-                    : (item.npaPosAmount / item.posAmount).clamp(0.0, 1.0);
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () => widget.onSelectSlice(
+            else ...[
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth >= 680;
+                  final donutWidget = _PortfolioDonutCard(
+                    metrics: metrics,
+                    totalPos: totalPos,
+                    selectedKey: widget.selectedSliceKey,
+                    palette: _palette,
+                    onSelect: (key) => widget.onSelectSlice(
                       _dimension,
-                      isSelected ? null : item.key,
+                      widget.selectedSliceKey == key ? null : key,
                     ),
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        color: isSelected
-                            ? theme.colorScheme.primaryContainer.withAlpha(115)
-                            : theme.colorScheme.surfaceContainerLowest,
-                        border: Border.all(
-                          color: isSelected
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.outlineVariant.withAlpha(153),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  item.title,
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                '${IndianFormatters.formatInrCompact(item.posAmount)} • ${item.loanCount} loans',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
+                  );
+
+                  final barsList = Column(
+                    children: List.generate(metrics.length, (index) {
+                      final item = metrics[index];
+                      final color = _palette[index % _palette.length];
+                      final isSelected = widget.selectedSliceKey == item.key;
+                      final ratio = maxPos <= 0
+                          ? 0.0
+                          : (item.posAmount / maxPos).clamp(0.0, 1.0);
+                      final npaRatioInBar = item.posAmount <= 0
+                          ? 0.0
+                          : (item.npaPosAmount / item.posAmount)
+                              .clamp(0.0, 1.0);
+                      final sharePct = totalPos <= 0
+                          ? 0.0
+                          : (item.posAmount / totalPos) * 100.0;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => widget.onSelectSlice(
+                            _dimension,
+                            isSelected ? null : item.key,
                           ),
-                          const SizedBox(height: 6),
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              final barWidth = constraints.maxWidth * ratio;
-                              final npaWidth = barWidth * npaRatioInBar;
-                              return Stack(
-                                children: [
-                                  Container(
-                                    height: 10,
-                                    width: constraints.maxWidth,
-                                    decoration: BoxDecoration(
-                                      color: theme.colorScheme.surfaceContainerHighest,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                  ),
-                                  AnimatedContainer(
-                                    duration: const Duration(milliseconds: 250),
-                                    height: 10,
-                                    width: barWidth,
-                                    decoration: BoxDecoration(
-                                      color: theme.colorScheme.primary,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                  ),
-                                  if (npaWidth > 0)
-                                    AnimatedContainer(
-                                      duration: const Duration(milliseconds: 250),
-                                      height: 10,
-                                      width: npaWidth,
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.error,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                    ),
-                                ],
-                              );
-                            },
-                          ),
-                          if (item.npaPosAmount > 0) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              '90+ DPD NPA: ${IndianFormatters.formatInrCompact(item.npaPosAmount)} (${item.npaSharePct.toStringAsFixed(1)}% of bucket POS)',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.error,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              color: isSelected
+                                  ? color.withAlpha(28)
+                                  : theme.colorScheme.surfaceContainerLowest,
+                              border: Border.all(
+                                color: isSelected
+                                    ? color
+                                    : theme.colorScheme.outlineVariant
+                                        .withAlpha(160),
+                                width: isSelected ? 1.6 : 1.0,
                               ),
                             ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: color,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        item.title,
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      '${sharePct.toStringAsFixed(1)}% • ${IndianFormatters.formatInrCompact(item.posAmount)} (${item.loanCount})',
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                LayoutBuilder(
+                                  builder: (context, barConstraints) {
+                                    final barWidth =
+                                        barConstraints.maxWidth * ratio;
+                                    final npaWidth = barWidth * npaRatioInBar;
+                                    return Stack(
+                                      children: [
+                                        Container(
+                                          height: 10,
+                                          width: barConstraints.maxWidth,
+                                          decoration: BoxDecoration(
+                                            color: theme
+                                                .colorScheme
+                                                .surfaceContainerHighest,
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                          ),
+                                        ),
+                                        AnimatedContainer(
+                                          duration:
+                                              const Duration(milliseconds: 250),
+                                          height: 10,
+                                          width: barWidth,
+                                          decoration: BoxDecoration(
+                                            color: color,
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                          ),
+                                        ),
+                                        if (npaWidth > 0)
+                                          AnimatedContainer(
+                                            duration: const Duration(
+                                                milliseconds: 250),
+                                            height: 10,
+                                            width: npaWidth,
+                                            decoration: BoxDecoration(
+                                              color: theme.colorScheme.error,
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                            ),
+                                          ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                                if (item.npaPosAmount > 0) ...[
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    '90+ DPD NPA: ${IndianFormatters.formatInrCompact(item.npaPosAmount)} (${item.npaSharePct.toStringAsFixed(1)}% of bucket POS)',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.error,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  );
+
+                  if (isWide) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(width: 240, child: donutWidget),
+                        const SizedBox(width: 16),
+                        Expanded(child: barsList),
+                      ],
+                    );
+                  }
+
+                  return Column(
+                    children: [
+                      donutWidget,
+                      const SizedBox(height: 14),
+                      barsList,
+                    ],
+                  );
+                },
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+}
+
+class _PortfolioDonutCard extends StatelessWidget {
+  const _PortfolioDonutCard({
+    required this.metrics,
+    required this.totalPos,
+    required this.selectedKey,
+    required this.palette,
+    required this.onSelect,
+  });
+
+  final List<SliceMetric> metrics;
+  final double totalPos;
+  final String? selectedKey;
+  final List<Color> palette;
+  final void Function(String key) onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final activeMetric = selectedKey == null
+        ? null
+        : metrics.cast<SliceMetric?>().firstWhere(
+              (m) => m?.key == selectedKey,
+              orElse: () => null,
+            );
+
+    final centerTitle = activeMetric != null
+        ? '${((activeMetric.posAmount / (totalPos <= 0 ? 1 : totalPos)) * 100).toStringAsFixed(1)}%'
+        : '${metrics.length}';
+    final centerSub = activeMetric?.title ?? 'Buckets';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withAlpha(160),
+        ),
+      ),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 156,
+            width: 156,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CustomPaint(
+                  size: const Size(156, 156),
+                  painter: _DonutRingPainter(
+                    metrics: metrics,
+                    totalPos: totalPos,
+                    selectedKey: selectedKey,
+                    palette: palette,
+                    trackColor: theme.colorScheme.surfaceContainerHighest,
+                  ),
+                ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      centerTitle,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Text(
+                        centerSub,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            alignment: WrapAlignment.center,
+            children: List.generate(math.min(metrics.length, 5), (i) {
+              final m = metrics[i];
+              final c = palette[i % palette.length];
+              final isSel = selectedKey == m.key;
+              return ChoiceChip(
+                label: Text(
+                  m.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall,
+                ),
+                avatar: CircleAvatar(backgroundColor: c, radius: 5),
+                selected: isSel,
+                onSelected: (_) => onSelect(m.key),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DonutRingPainter extends CustomPainter {
+  const _DonutRingPainter({
+    required this.metrics,
+    required this.totalPos,
+    required this.selectedKey,
+    required this.palette,
+    required this.trackColor,
+  });
+
+  final List<SliceMetric> metrics;
+  final double totalPos;
+  final String? selectedKey;
+  final List<Color> palette;
+  final Color trackColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    const strokeWidth = 18.0;
+    final radius = (math.min(size.width, size.height) - strokeWidth) / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final bgPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    canvas.drawCircle(center, radius, bgPaint);
+
+    if (totalPos <= 0 || metrics.isEmpty) return;
+
+    var startAngle = -math.pi / 2;
+    for (var i = 0; i < metrics.length; i++) {
+      final m = metrics[i];
+      final sweep = (m.posAmount / totalPos) * math.pi * 2;
+      if (sweep <= 0) continue;
+
+      final isSelected = selectedKey == m.key;
+      final paint = Paint()
+        ..color = palette[i % palette.length]
+            .withAlpha(selectedKey == null || isSelected ? 255 : 95)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = isSelected ? strokeWidth + 4 : strokeWidth
+        ..strokeCap = StrokeCap.butt;
+
+      canvas.drawArc(rect, startAngle, sweep, false, paint);
+      startAngle += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DonutRingPainter oldDelegate) {
+    return oldDelegate.metrics != metrics ||
+        oldDelegate.totalPos != totalPos ||
+        oldDelegate.selectedKey != selectedKey;
   }
 }
 
@@ -392,11 +665,12 @@ class _SummaryPill extends StatelessWidget {
       child: Text(
         '$label: $value',
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: isAlert ? scheme.onErrorContainer : scheme.onSecondaryContainer,
+              color: isAlert
+                  ? scheme.onErrorContainer
+                  : scheme.onSecondaryContainer,
               fontWeight: FontWeight.w600,
             ),
       ),
     );
   }
 }
-
