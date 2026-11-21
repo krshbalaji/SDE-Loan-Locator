@@ -19,9 +19,11 @@ class AuthService extends ChangeNotifier {
   String? _errorMessage;
   bool _demoLoginEnabled = true;
   bool _isDemoSession = false;
+  bool _isInitializing = true;
 
   bool get demoLoginEnabled => _demoLoginEnabled;
   bool get isDemoSession => _isDemoSession;
+  bool get isInitializing => _isInitializing;
 
   AppUser? get currentUser => _currentUser;
   List<AppUser> get staffDirectory => List.unmodifiable(_staffDirectory);
@@ -199,7 +201,8 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setDemoLoginEnabled(bool enabled) async {
+  Future<String?> setDemoLoginEnabled(bool enabled) async {
+    final previous = _demoLoginEnabled;
     _demoLoginEnabled = enabled;
     if (!enabled) {
       _staffDirectory = _staffDirectory
@@ -207,32 +210,43 @@ class AuthService extends ChangeNotifier {
           .toList();
     }
     notifyListeners();
-    if (!useFirebase) return;
-    await FirebaseFirestore.instance
-        .collection('app_config')
-        .doc('settings')
-        .set({
-          'demo_login_enabled': enabled,
-          'updated_at': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+    if (!useFirebase) return null;
+    try {
+      await FirebaseFirestore.instance
+          .collection('app_config')
+          .doc('settings')
+          .set({
+            'demo_login_enabled': enabled,
+            'updated_at': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+      return null;
+    } catch (e) {
+      _demoLoginEnabled = previous;
+      notifyListeners();
+      return 'Failed to save Demo setting to Firestore: ';
+    }
   }
 
   Future<void> init() async {
-    if (!useFirebase) {
-      _staffDirectory = List<AppUser>.from(demoUsers);
-      return;
-    }
-    await refreshGlobalSettings();
-    final fbUser = FirebaseAuth.instance.currentUser;
-    if (fbUser != null) {
-      final resolved = await _resolveFirebaseUser(fbUser);
-      if (!resolved.isActive) {
-        await signOut();
+    try {
+      if (!useFirebase) {
+        _staffDirectory = List<AppUser>.from(demoUsers);
         return;
       }
-      _isDemoSession = false;
-      _currentUser = resolved;
-      await refreshStaffDirectory();
+      await refreshGlobalSettings();
+      final fbUser = FirebaseAuth.instance.currentUser;
+      if (fbUser != null) {
+        final resolved = await _resolveFirebaseUser(fbUser);
+        if (!resolved.isActive) {
+          await signOut();
+          return;
+        }
+        _isDemoSession = false;
+        _currentUser = resolved;
+        await refreshStaffDirectory();
+      }
+    } finally {
+      _isInitializing = false;
       notifyListeners();
     }
   }
@@ -551,6 +565,7 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 }
+
 
 
 

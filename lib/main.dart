@@ -88,7 +88,14 @@ class _AuthGateState extends State<_AuthGate> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
-    final user = auth.currentUser;
+    if (auth.isInitializing) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final demoBlocked = auth.isDemoSession && !auth.demoLoginEnabled;
+    final user = demoBlocked ? null : auth.currentUser;
     final sessionKey = user == null
         ? 'SIGNED_OUT'
         : '${user.uid}_${auth.isDemoSession ? "DEMO" : "LIVE"}';
