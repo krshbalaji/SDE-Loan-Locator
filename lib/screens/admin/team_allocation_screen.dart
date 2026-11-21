@@ -57,17 +57,18 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
         ),
         const SizedBox(height: 6),
         Container(
-          constraints: const BoxConstraints(maxHeight: 220),
+          padding: const EdgeInsets.symmetric(vertical: 4),
           decoration: BoxDecoration(
             border: Border.all(color: Colors.grey.shade300),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: ListView(
-            shrinkWrap: true,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               for (final feat in AppFeature.values)
                 CheckboxListTile(
                   dense: true,
+                  visualDensity: VisualDensity.compact,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                   title: Text(
                     feat.label,
@@ -755,4 +756,5 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
     );
   }
 }
+
 
