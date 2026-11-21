@@ -32,6 +32,9 @@ class MasterDashboard extends StatefulWidget {
 class _MasterDashboardState extends State<MasterDashboard> {
   int _selectedIndex = 0;
   double _conveyanceRatePerKm = ConveyanceEngine.defaultRatePerKmInr;
+  String? _selectedSliceBranch;
+  String? _selectedSliceAgentId;
+  String? _selectedSliceProductId;
 
   Future<void> _showProductEditorDialog(
     LoanPortfolioProvider portfolio, {
@@ -448,9 +451,49 @@ class _MasterDashboardState extends State<MasterDashboard> {
           borrowers: portfolio.borrowers,
           users: auth.currentUser != null ? [auth.currentUser!] : const [],
           products: portfolio.products,
+          selectedBranch: _selectedSliceBranch,
+          selectedAgentId: _selectedSliceAgentId,
+          selectedProductId: _selectedSliceProductId,
+          onSliceChanged: ({branch, agentId, productId}) {
+            setState(() {
+              _selectedSliceBranch = branch;
+              _selectedSliceAgentId = agentId;
+              _selectedSliceProductId = productId;
+            });
+          },
+          onResetSlices: () {
+            setState(() {
+              _selectedSliceBranch = null;
+              _selectedSliceAgentId = null;
+              _selectedSliceProductId = null;
+            });
+          },
         ),
         const SizedBox(height: 12),
-        PortfolioIntelligencePanel(loans: portfolio.loans, borrowers: portfolio.borrowers),
+        Builder(
+          builder: (context) {
+            final slicedLoans = portfolio.loans.where((loan) {
+      final borrower = ({ for (final b in portfolio.borrowers) b.borrowerId: b })[loan.borrowerId];
+      final bBranch = (borrower?.branch != null && borrower!.branch!.trim().isNotEmpty)
+          ? borrower.branch!.trim()
+          : 'Unassigned';
+      if (_selectedSliceBranch != null && bBranch != _selectedSliceBranch) {
+        return false;
+      }
+      if (_selectedSliceAgentId != null && loan.assignedAgentId != _selectedSliceAgentId) {
+        return false;
+      }
+      if (_selectedSliceProductId != null && loan.productId != _selectedSliceProductId) {
+        return false;
+      }
+      return true;
+    }).toList();
+            return PortfolioIntelligencePanel(
+              loans: slicedLoans,
+              borrowers: portfolio.borrowers,
+            );
+          },
+        ),
             const SizedBox(height: 8),
             AgingBucketChart(breakdown: kpi.agingBreakdown),
         const SizedBox(height: 14),
@@ -675,6 +718,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
     );
   }
 }
+
 
 
 
