@@ -13,6 +13,7 @@ import '../../utils/indian_formatters.dart';
 import '../../widgets/aging_bucket_chart.dart';
 import '../../widgets/portfolio_intelligence_panel.dart';
 import '../../widgets/governance_approvals_panel.dart';
+import '../../widgets/power_bi_dimension_slice_panel.dart';
 import '../admin/excel_import_screen.dart';
 import '../admin/team_allocation_screen.dart';
 import '../collections/collections_queue_screen.dart';
@@ -359,7 +360,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard),
-            label: 'Overview',
+            label: 'Executive BI',
           ),
           NavigationDestination(
             icon: Icon(Icons.account_balance_wallet_outlined),
@@ -374,7 +375,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
           NavigationDestination(
             icon: Icon(Icons.assignment_late_outlined),
             selectedIcon: Icon(Icons.assignment_late),
-            label: 'Queue',
+            label: 'Recovery Queue',
           ),
           NavigationDestination(
             icon: Icon(Icons.upload_file_outlined),
@@ -442,6 +443,13 @@ class _MasterDashboardState extends State<MasterDashboard> {
           ],
         ),
         const SizedBox(height: 14),
+        PowerBiDimensionSlicePanel(
+          loans: portfolio.loans,
+          borrowers: portfolio.borrowers,
+          users: auth.currentUser != null ? [auth.currentUser!] : const [],
+          products: portfolio.products,
+        ),
+        const SizedBox(height: 12),
         PortfolioIntelligencePanel(loans: portfolio.loans, borrowers: portfolio.borrowers),
             const SizedBox(height: 8),
             AgingBucketChart(breakdown: kpi.agingBreakdown),
@@ -667,6 +675,8 @@ class _MasterDashboardState extends State<MasterDashboard> {
     );
   }
 }
+
+
 
 
 

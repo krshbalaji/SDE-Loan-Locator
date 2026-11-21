@@ -27,7 +27,7 @@ void main() {
     expect(find.text('PAR > 30 Days'), findsOneWidget);
 
     // Navigate to Collections Queue tab
-    await tester.tap(find.text('Queue'));
+    await tester.tap(find.text('Recovery Queue'));
     await tester.pumpAndSettle();
     expect(find.text('EARLY WARNING'), findsWidgets);
 
@@ -37,3 +37,4 @@ void main() {
     expect(find.text('New Loan'), findsOneWidget);
   });
 }
+
