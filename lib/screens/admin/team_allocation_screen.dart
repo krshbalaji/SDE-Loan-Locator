@@ -20,6 +20,127 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
   final Set<String> _selectedLoanIds = {};
   bool _assigning = false;
 
+  Future<void> _showEditStaffDialog(AuthService auth, AppUser staff) async {
+    final nameCtrl = TextEditingController(text: staff.displayName);
+    final phoneCtrl = TextEditingController(text: staff.phone);
+    final zoneCtrl = TextEditingController(text: staff.zone);
+    final branchCtrl = TextEditingController(text: staff.branch);
+    var selectedRole = staff.role;
+    var isActive = staff.isActive;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDialog) => AlertDialog(
+          title: Text('Edit Staff • ${staff.displayName}'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<UserRole>(
+                    value: selectedRole,
+                    decoration: const InputDecoration(
+                      labelText: 'Hierarchy Role',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: UserRole.values
+                        .map((r) =>
+                            DropdownMenuItem(value: r, child: Text(r.label)))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) setStateDialog(() => selectedRole = v);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Display Name *',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Mobile (+91)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: zoneCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Zone / Cluster',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: branchCtrl,
+                          textCapitalization: TextCapitalization.characters,
+                          decoration: const InputDecoration(
+                            labelText: 'Branch / Area *',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Account Active'),
+                    value: isActive,
+                    onChanged: (v) => setStateDialog(() => isActive = v),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (nameCtrl.text.trim().isEmpty) return;
+                await auth.updateStaffUser(
+                  staff.copyWith(
+                    displayName: nameCtrl.text.trim(),
+                    role: selectedRole,
+                    phone: phoneCtrl.text.trim(),
+                    zone: zoneCtrl.text.trim(),
+                    branch: branchCtrl.text.trim().toUpperCase(),
+                    isActive: isActive,
+                  ),
+                );
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Updated ${nameCtrl.text.trim()}.'),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Save Changes'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _showCreateStaffDialog(AuthService auth) async {
     final creator = auth.currentUser!;
     final allowedRoles = creator.creatableRoles;
@@ -290,20 +411,32 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                     subtitle: Text(
                       '${staff.email} • Branch: ${staff.branch} • Zone: ${staff.zone}',
                     ),
-                    trailing: user.role.rank > staff.role.rank
-                        ? Switch(
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (user.isExecutive || user.role.rank > staff.role.rank)
+                          IconButton(
+                            tooltip: 'Edit Staff Details',
+                            icon: const Icon(Icons.edit_outlined, size: 19),
+                            onPressed: () => _showEditStaffDialog(auth, staff),
+                          ),
+                        if (user.role.rank > staff.role.rank)
+                          Switch(
                             value: staff.isActive,
                             onChanged: (val) => auth.updateStaffUser(
                               staff.copyWith(isActive: val),
                             ),
                           )
-                        : Chip(
+                        else
+                          Chip(
                             label: Text(
                               staff.isActive ? 'ACTIVE' : 'SUSPENDED',
                               style: const TextStyle(fontSize: 10),
                             ),
                             visualDensity: VisualDensity.compact,
                           ),
+                      ],
+                    ),
                   ),
               ],
             ),
@@ -486,5 +619,9 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
     );
   }
 }
+
+
+
+
 
 

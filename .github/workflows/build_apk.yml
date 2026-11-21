@@ -1,9 +1,12 @@
-﻿name: Build Android APK & Web App
+name: Build Android APK & Web App
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-apk:
@@ -36,17 +39,28 @@ jobs:
       - name: Build Release APK
         run: flutter build apk --release
 
-      - name: Upload SDE-Loan-Locator APK
+      - name: Prepare Direct APK Binary
+        run: cp build/app/outputs/flutter-apk/app-release.apk SDE-Loan-Locator.apk
+
+      - name: Upload SDE-Loan-Locator APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SDE-Loan-Locator-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: SDE-Loan-Locator.apk
           retention-days: 30
+
+      - name: Publish Direct APK to GitHub Release (latest)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: SDE Loan Locator Latest Build
+          files: SDE-Loan-Locator.apk
+          make_latest: true
 
       - name: Build Flutter Web App
         run: flutter build web --release --no-tree-shake-icons
 
-      - name: Upload SDE-Loan-Locator Web App
+      - name: Upload SDE-Loan-Locator Web App Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SDE-Loan-Locator-web-app

@@ -26,6 +26,15 @@ class AuthService extends ChangeNotifier {
 
   static const List<AppUser> demoUsers = [
     AppUser(
+      uid: 'uid_demo_tester',
+      email: 'demo@sde-finance.in',
+      displayName: 'Demo User (Tester)',
+      role: UserRole.ceo,
+      phone: '+919000000000',
+      zone: 'All Zones',
+      branch: 'Madurai HQ',
+    ),
+    AppUser(
       uid: 'uid_master_balaji',
       email: 'balaji@sde-finance.in',
       displayName: 'A. K. Balaji (CEO)',
@@ -346,6 +355,15 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void switchToDemoSandbox() {
+    _currentUser = demoUsers.firstWhere(
+      (u) => u.email == 'demo@sde-finance.in',
+      orElse: () => demoUsers.first,
+    );
+    _errorMessage = null;
+    notifyListeners();
+  }
+
   void signInAsDemoUser(AppUser user) {
     _errorMessage = null;
     _currentUser = user;
@@ -388,3 +406,6 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 }
+
+
+

@@ -7,6 +7,7 @@ import '../../models/loan_product_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_loan_service.dart';
 import '../../services/local_vault_service.dart';
+import '../../services/location_service.dart';
 import '../../services/pdf_export_service.dart';
 import '../../utils/indian_formatters.dart';
 import '../../widgets/aging_bucket_chart.dart';
@@ -299,6 +300,16 @@ class _MasterDashboardState extends State<MasterDashboard> {
                 visualDensity: VisualDensity.compact,
               ),
             ),
+          IconButton(
+            tooltip: 'Import Excel / CSV',
+            icon: const Icon(Icons.upload_file),
+            onPressed: () => setState(() => _selectedIndex = 5),
+          ),
+          IconButton(
+            tooltip: 'Download Latest Android APK',
+            icon: const Icon(Icons.android),
+            onPressed: () => LocationService.launchExternalUrl('https://github.com/krshbalaji/SDE-Loan-Locator/releases/latest'),
+          ),
           IconButton(
             tooltip: 'Backup Local Drive Vault (.json)',
             icon: const Icon(Icons.save_alt),
@@ -651,6 +662,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
     );
   }
 }
+
 
 
 

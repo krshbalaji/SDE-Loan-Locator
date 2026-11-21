@@ -49,7 +49,7 @@ void main() {
         TextCellValue('SDE-LN-5001'),
         TextCellValue('New Trader'),
         IntCellValue(150000),
-        TextCellValue('9.9195, 78.1193'),
+        TextCellValue('9.9252, 78.1198'),
         TextCellValue('9842199999'),
       ]);
       // Duplicate LoanNo row
@@ -113,7 +113,8 @@ void main() {
       expect(result.duplicateLoanCount, 1);
       expect(result.duplicateBorrowerCount, 1);
       expect(result.rows.first.mobilePrimary, '+919842199999');
-      expect(result.rows.first.latitude, closeTo(9.9195, 0.0001));
+      expect(result.rows.first.latitude, closeTo(9.9252, 0.0001));
     });
   });
 }
+

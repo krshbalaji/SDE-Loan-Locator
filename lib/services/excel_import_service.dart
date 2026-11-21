@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:excel/excel.dart';
@@ -10,6 +10,7 @@ import '../models/loan_model.dart';
 import '../models/loan_product_model.dart';
 import '../utils/indian_formatters.dart';
 import 'firestore_loan_service.dart';
+import 'location_service.dart';
 
 class ExcelImportRow {
   const ExcelImportRow({
@@ -502,9 +503,25 @@ class ExcelImportService {
         warnings.add('Invalid loan amount "$rawAmount"');
       }
 
-      final coords = GeoFilterEngine.parseLatLong(rawLatLng);
-      if (coords == null) {
-        warnings.add('Invalid or missing LatLong "$rawLatLng"');
+      final parsedCoords = GeoFilterEngine.parseLatLong(rawLatLng);
+      final resolvedGeo = LocationService.resolveCoordinatesForPlace(
+        rawLat: parsedCoords?.lat,
+        rawLng: parsedCoords?.lng,
+        addressOrCity: location,
+        branch: branch,
+        pincode: pincode,
+      );
+      final coords = (lat: resolvedGeo.lat, lng: resolvedGeo.lng);
+      if (parsedCoords == null ||
+          !LocationService.isValidIndiaCoordinate(
+            parsedCoords.lat,
+            parsedCoords.lng,
+          )) {
+        warnings.add(
+          resolvedGeo.resolvedFromPlace
+              ? 'Auto-pinned to town/pincode center (${resolvedGeo.lat.toStringAsFixed(4)}, ${resolvedGeo.lng.toStringAsFixed(4)})'
+              : 'Missing/out-of-range LatLong "$rawLatLng" (defaulted to HQ)',
+        );
       }
 
       final normalizedMobile = IndianFormatters.normalizeIndianMobile(rawMobile);
@@ -543,8 +560,8 @@ class ExcelImportService {
           coApplicantName:
               coApp.isEmpty || coApp.toUpperCase() == 'N/A' ? null : coApp,
           amount: amount,
-          latitude: coords?.lat,
-          longitude: coords?.lng,
+          latitude: coords.lat,
+          longitude: coords.lng,
           mobilePrimary: normalizedMobile,
           panNumber: pan == 'N/A' ? '' : pan,
           aadhaarMasked: maskedUid,
@@ -725,6 +742,8 @@ class ExcelImportService {
     return double.tryParse(cleaned);
   }
 }
+
+
 
 
 

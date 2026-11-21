@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/firestore_loan_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -140,6 +141,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             : const Text('Sign In'),
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: auth.isLoading
+                          ? null
+                          : () => auth.switchToDemoSandbox(),
+                      icon: const Icon(Icons.play_circle_outline),
+                      label: const Text('Demo Check-In (Tester Sandbox)'),
+                    ),
                     if (!auth.useFirebase) ...[
                       const Divider(height: 28),
                       Text(
@@ -179,6 +188,9 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
+
+
 
 
 

@@ -833,6 +833,127 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     );
   }
 
+  Future<void> _showUpdateGeoPinDialog(BorrowerModel borrower) async {
+    final portfolio = context.read<LoanPortfolioProvider>();
+    final inputCtrl = TextEditingController();
+    var lat = borrower.latitude;
+    var lng = borrower.longitude;
+    var capturing = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDialog) => AlertDialog(
+          title: Text('Geo-Pin • ${borrower.fullName}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Current: (${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)})',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                onPressed: capturing
+                    ? null
+                    : () async {
+                        setStateDialog(() => capturing = true);
+                        final res = await LocationService.getCurrentLocation();
+                        setStateDialog(() {
+                          capturing = false;
+                          lat = res.latitude;
+                          lng = res.longitude;
+                        });
+                      },
+                icon: const Icon(Icons.my_location, size: 18),
+                label: Text(
+                  capturing
+                      ? 'Capturing Live GPS...'
+                      : 'Capture Live Device GPS Now',
+                ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () {
+                  final resolved = LocationService.resolveCoordinatesForPlace(
+                    addressOrCity: borrower.addressText,
+                    branch: borrower.branch,
+                    pincode: borrower.pincode,
+                  );
+                  setStateDialog(() {
+                    lat = resolved.lat;
+                    lng = resolved.lng;
+                  });
+                },
+                icon: const Icon(Icons.location_city, size: 18),
+                label: Text(
+                  'Auto-Resolve from City/Pin (${borrower.branch ?? borrower.pincode ?? "Address"})',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: inputCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Or Paste Google Maps Link / Lat, Lng',
+                  hintText: 'e.g. 27.8920, 77.3680 or maps.google.com/...',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onChanged: (val) {
+                  final parsed =
+                      LocationService.extractCoordinatesFromInput(val);
+                  if (parsed != null) {
+                    setStateDialog(() {
+                      lat = parsed.lat;
+                      lng = parsed.lng;
+                    });
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (!LocationService.isValidIndiaCoordinate(lat, lng)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Coordinates must be valid Indian latitude/longitude (6°–38°N, 68°–98°E).',
+                      ),
+                    ),
+                  );
+                  return;
+                }
+                await portfolio.verifyBorrowerGeoPin(
+                  borrowerId: borrower.borrowerId,
+                  latitude: lat,
+                  longitude: lng,
+                );
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Geo-Pin verified & saved: (${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)})',
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Save & Mark Verified'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildKycGeoCard(BorrowerModel borrower) {
     return Card(
       child: Padding(
@@ -888,6 +1009,11 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                   ),
                   icon: const Icon(Icons.navigation, size: 16),
                   label: const Text('Navigate'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () => _showUpdateGeoPinDialog(borrower),
+                  icon: const Icon(Icons.add_location_alt, size: 16),
+                  label: const Text('Pin / Update GPS'),
                 ),
                 OutlinedButton.icon(
                   onPressed: () =>
@@ -1050,5 +1176,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     );
   }
 }
+
+
 
 
