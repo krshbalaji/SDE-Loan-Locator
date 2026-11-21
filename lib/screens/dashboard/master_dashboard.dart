@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../engines/conveyance_engine.dart';
 import '../../engines/delinquency_engine.dart';
+import '../../models/loan_model.dart';
 import '../../models/loan_product_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_loan_service.dart';
@@ -14,6 +15,7 @@ import '../../widgets/aging_bucket_chart.dart';
 import '../../widgets/portfolio_intelligence_panel.dart';
 import '../../widgets/governance_approvals_panel.dart';
 import '../../widgets/power_bi_dimension_slice_panel.dart';
+import '../../widgets/portfolio_visual_analytics_panel.dart';
 import '../admin/excel_import_screen.dart';
 import '../admin/team_allocation_screen.dart';
 import '../collections/collections_queue_screen.dart';
@@ -35,6 +37,8 @@ class _MasterDashboardState extends State<MasterDashboard> {
   String? _selectedSliceBranch;
   String? _selectedSliceAgentId;
   String? _selectedSliceProductId;
+  AnalyticsDimension? _visualDimension;
+  String? _visualSliceKey;
 
   Future<void> _showProductEditorDialog(
     LoanPortfolioProvider portfolio, {
@@ -472,22 +476,67 @@ class _MasterDashboardState extends State<MasterDashboard> {
         const SizedBox(height: 12),
         Builder(
           builder: (context) {
+            final borrowerMap = { for (final b in portfolio.borrowers) b.borrowerId: b };
+            String matchVisualKey(LoanModel loan) {
+              final borrower = borrowerMap[loan.borrowerId];
+              switch (_visualDimension!) {
+                case AnalyticsDimension.branch:
+                  final rawBranch = (borrower?.branch ?? '').trim();
+                  return rawBranch.isEmpty ? 'Unassigned Branch' : rawBranch;
+                case AnalyticsDimension.employee:
+                  final agentId = loan.assignedAgentId.trim();
+                  return agentId.isEmpty ? 'Unassigned Officer' : agentId;
+                case AnalyticsDimension.product:
+                  final prod = loan.productId.trim();
+                  return prod.isEmpty ? 'General Loan' : prod;
+                case AnalyticsDimension.tenureMob:
+                  final mob = loan.monthsOnBooks ?? 0;
+                  if (mob <= 6) return '0-6M';
+                  if (mob <= 12) return '7-12M';
+                  if (mob <= 24) return '13-24M';
+                  return '25M+';
+                case AnalyticsDimension.creditScore:
+                  final score = borrower?.creditScore;
+                  if (score == null || score <= 0) return 'NTC / Unrated';
+                  if (score < 650) return '< 650';
+                  if (score < 700) return '650-699';
+                  if (score < 750) return '700-749';
+                  return '750+';
+                case AnalyticsDimension.loanBand:
+                  final amt = loan.principalOutstanding > 0
+                      ? loan.principalOutstanding
+                      : loan.principalSanctioned;
+                  if (amt < 500000) return '< Rs 5L';
+                  if (amt < 1500000) return 'Rs 5L-15L';
+                  if (amt < 5000000) return 'Rs 15L-50L';
+                  return 'Rs 50L+';
+                case AnalyticsDimension.npaBand:
+                  if (loan.dpd <= 0) return 'Current (0 DPD)';
+                  if (loan.dpd <= 30) return '1-30 DPD';
+                  if (loan.dpd <= 60) return '31-60 DPD';
+                  if (loan.dpd <= 90) return '61-90 DPD';
+                  return '90+ DPD (NPA)';
+              }
+            }
             final slicedLoans = portfolio.loans.where((loan) {
-      final borrower = ({ for (final b in portfolio.borrowers) b.borrowerId: b })[loan.borrowerId];
-      final bBranch = (borrower?.branch != null && borrower!.branch!.trim().isNotEmpty)
-          ? borrower.branch!.trim()
-          : 'Unassigned';
-      if (_selectedSliceBranch != null && bBranch != _selectedSliceBranch) {
-        return false;
-      }
-      if (_selectedSliceAgentId != null && loan.assignedAgentId != _selectedSliceAgentId) {
-        return false;
-      }
-      if (_selectedSliceProductId != null && loan.productId != _selectedSliceProductId) {
-        return false;
-      }
-      return true;
-    }).toList();
+              final borrower = borrowerMap[loan.borrowerId];
+              final bBranch = (borrower?.branch != null && borrower!.branch!.trim().isNotEmpty)
+                  ? borrower.branch!.trim()
+                  : 'Unassigned';
+              if (_selectedSliceBranch != null && bBranch != _selectedSliceBranch) {
+                return false;
+              }
+              if (_selectedSliceAgentId != null && loan.assignedAgentId != _selectedSliceAgentId) {
+                return false;
+              }
+              if (_selectedSliceProductId != null && loan.productId != _selectedSliceProductId) {
+                return false;
+              }
+              if (_visualDimension != null && _visualSliceKey != null && matchVisualKey(loan) != _visualSliceKey) {
+                return false;
+              }
+              return true;
+            }).toList();
             return PortfolioIntelligencePanel(
               loans: slicedLoans,
               borrowers: portfolio.borrowers,
@@ -718,6 +767,9 @@ class _MasterDashboardState extends State<MasterDashboard> {
     );
   }
 }
+
+
+
 
 
 
