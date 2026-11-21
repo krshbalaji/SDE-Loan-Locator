@@ -603,7 +603,11 @@ class ExcelImportService {
     required LoanProductModel defaultProduct,
     required String assignedAgentId,
     required String importedByUid,
+    bool overwriteExisting = false,
   }) async {
+    if (overwriteExisting && portfolio.repository is InMemoryDemoLoanService) {
+      (portfolio.repository as InMemoryDemoLoanService).clearAllData();
+    }
     var imported = 0;
     final now = DateTime.now();
 
@@ -742,6 +746,8 @@ class ExcelImportService {
     return double.tryParse(cleaned);
   }
 }
+
+
 
 
 

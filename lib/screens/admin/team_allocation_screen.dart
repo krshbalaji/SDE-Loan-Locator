@@ -125,13 +125,7 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                   ),
                 );
                 if (ctx.mounted) Navigator.pop(ctx);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Updated ${nameCtrl.text.trim()}.'),
-                    ),
-                  );
-                }
+                
               },
               child: const Text('Save Changes'),
             ),
@@ -420,7 +414,7 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                             icon: const Icon(Icons.edit_outlined, size: 19),
                             onPressed: () => _showEditStaffDialog(auth, staff),
                           ),
-                        if (user.role.rank > staff.role.rank)
+                        if (user.isAdminOrAbove && staff.uid != user.uid)
                           Switch(
                             value: staff.isActive,
                             onChanged: (val) => auth.updateStaffUser(
@@ -619,6 +613,9 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
     );
   }
 }
+
+
+
 
 
 

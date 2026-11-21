@@ -288,7 +288,123 @@ class FirestoreLoanService implements LoanDataRepository {
 /// Seeded in-memory repository for immediate offline / demo usage when Firebase
 /// credentials are not yet configured.
 class InMemoryDemoLoanService implements LoanDataRepository {
+  void clearAllData() {
+    _borrowers.clear();
+    _products.clear();
+    _loans.clear();
+    _installments.clear();
+    _transactions.clear();
+    _logs.clear();
+  }
+
+  void seedSamplePortfolio() {
+    if (_loans.isNotEmpty) return;
+    final now = DateTime.now();
+    const prod = LoanProductModel(
+      productId: 'PROD_LAP_DEMO',
+      productName: 'Loan Against Property (Demo)',
+      interestMethod: InterestMethod.reducingBalance,
+      annualInterestRate: 13.5,
+      repaymentFrequency: RepaymentFrequency.monthly,
+      maxTenureInstallments: 180,
+      processingFeePct: 1.5,
+      gstRatePct: 18.0,
+    );
+    _products[prod.productId] = prod;
+
+    final b1 = BorrowerModel(
+      borrowerId: 'BRW_DEMO_001',
+      fullName: 'Bhagavati Demo (Hodal)',
+      mobilePrimary: '9811100001',
+      panNumber: 'ABCDE1234F',
+      addressText: 'Main Market, Hodal, Haryana 121106',
+      latitude: 27.8920,
+      longitude: 77.3680,
+      geohash: 'ttv4',
+      geoVerified: true,
+      branch: 'HODAL',
+      pincode: '121106',
+      assignedAgentId: 'uid_demo_tester',
+      createdAt: DateTime(2026, 5, 1),
+      updatedAt: DateTime(2026, 11, 1),
+    );
+    final b2 = BorrowerModel(
+      borrowerId: 'BRW_DEMO_002',
+      fullName: 'Karthik Sundaram (Madurai)',
+      mobilePrimary: '9842100002',
+      panNumber: 'FGHIJ5678K',
+      addressText: 'KK Nagar, Madurai, Tamil Nadu 625020',
+      latitude: 9.9252,
+      longitude: 78.1198,
+      geohash: 'w6j3',
+      geoVerified: true,
+      branch: 'MADURAI',
+      pincode: '625020',
+      assignedAgentId: 'uid_demo_tester',
+      createdAt: DateTime(2026, 6, 15),
+      updatedAt: DateTime(2026, 11, 1),
+    );
+    _borrowers[b1.borrowerId] = b1;
+    _borrowers[b2.borrowerId] = b2;
+
+    final l1 = LoanModel(
+      loanId: 'LN_DEMO_101',
+      applicationNo: 'APP_DEMO_101',
+      borrowerId: b1.borrowerId,
+      productId: prod.productId,
+      assignedAgentId: 'uid_demo_tester',
+      principalSanctioned: 850000,
+      processingFeeAmount: 12750,
+      gstAmount: 2295,
+      netDisbursedAmount: 834955,
+      interestRateAnnual: 13.5,
+      interestMethod: InterestMethod.reducingBalance,
+      repaymentFrequency: RepaymentFrequency.monthly,
+      tenureInstallments: 36,
+      emiAmount: 28860,
+      disbursementDate: now.subtract(const Duration(days: 180)),
+      firstDueDate: now.subtract(const Duration(days: 150)),
+      maturityDate: now.add(const Duration(days: 900)),
+      scheduleVersion: 1,
+      principalOutstanding: 710000,
+      interestOutstanding: 42000,
+      feesOutstanding: 0,
+      dpd: 12,
+      agingBucket: AgingBucket.dpd1To30,
+      status: LoanStatus.active,
+    );
+    final l2 = LoanModel(
+      loanId: 'LN_DEMO_102',
+      applicationNo: 'APP_DEMO_102',
+      borrowerId: b2.borrowerId,
+      productId: prod.productId,
+      assignedAgentId: 'uid_demo_tester',
+      principalSanctioned: 1250000,
+      processingFeeAmount: 18750,
+      gstAmount: 3375,
+      netDisbursedAmount: 1227875,
+      interestRateAnnual: 12.75,
+      interestMethod: InterestMethod.reducingBalance,
+      repaymentFrequency: RepaymentFrequency.monthly,
+      tenureInstallments: 48,
+      emiAmount: 33250,
+      disbursementDate: now.subtract(const Duration(days: 120)),
+      firstDueDate: now.subtract(const Duration(days: 90)),
+      maturityDate: now.add(const Duration(days: 1320)),
+      scheduleVersion: 1,
+      principalOutstanding: 1080000,
+      interestOutstanding: 64000,
+      feesOutstanding: 0,
+      dpd: 0,
+      agingBucket: AgingBucket.current,
+      status: LoanStatus.active,
+    );
+    _loans[l1.loanId] = l1;
+    _loans[l2.loanId] = l2;
+  }
   InMemoryDemoLoanService() {
+    seedSamplePortfolio();
+    seedSamplePortfolio();
     _seedInitialData();
   }
 
@@ -893,6 +1009,7 @@ class LoanPortfolioProvider extends ChangeNotifier {
 
   final LoanDataRepository _repository;
   final bool isDemoMode;
+  LoanDataRepository get repository => _repository;
 
   bool _isLoading = false;
   String? _error;
@@ -1442,6 +1559,10 @@ class LoanPortfolioProvider extends ChangeNotifier {
     return updatedCount;
   }
 }
+
+
+
+
 
 
 

@@ -355,6 +355,44 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<String> sendPasswordReset(String email) async {
+    final clean = email.trim();
+    if (clean.isEmpty) {
+      return 'Enter the officer email first to receive a reset link.';
+    }
+    if (!useFirebase) {
+      return 'Demo / Sandbox mode uses 1-tap check-in; in live mode Firebase sends a reset email to $clean.';
+    }
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: clean);
+      return 'Password reset link sent to $clean. Check inbox & spam.';
+    } on FirebaseAuthException catch (e) {
+      return e.message ?? 'Could not send password reset email.';
+    }
+  }
+
+  Future<String> changeCurrentPassword(String newPassword) async {
+    if (newPassword.trim().length < 6) {
+      return 'New password must be at least 6 characters.';
+    }
+    if (!useFirebase) {
+      return 'Sandbox session active — password change applies to live Firebase accounts.';
+    }
+    final fbUser = FirebaseAuth.instance.currentUser;
+    if (fbUser == null) {
+      return 'Sign in with email & temporary password first to change password.';
+    }
+    try {
+      await fbUser.updatePassword(newPassword.trim());
+      return 'Password updated successfully.';
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        return 'Please sign out and sign in once with your temporary password, then change password.';
+      }
+      return e.message ?? 'Could not update password.';
+    }
+  }
+
   void switchToDemoSandbox() {
     _currentUser = demoUsers.firstWhere(
       (u) => u.email == 'demo@sde-finance.in',
@@ -406,6 +444,7 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 }
+
 
 
 

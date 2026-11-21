@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/loan_product_model.dart';
@@ -7,9 +7,8 @@ import '../../services/excel_import_service.dart';
 import '../../services/firestore_loan_service.dart';
 import '../../utils/indian_formatters.dart';
 
-/// Admin/Master Smart `.xlsx` & `.csv` Bulk Ingestion Screen.
-/// Supports both legacy 7-column sheets (`Location`, `ApplicationNo`, `LoanNo`,
-/// `CustomerName`, `Amount`, `LatLong`, `MobileNo`) and full NBFC master sheets
+/// Bulk Excel (.xlsx) & NBFC Master (.csv) import screen supporting both simple sheets
+/// (`Location`, `ApplicationNo`, `LoanNo`, `CustomerName`, `Amount`, `LatLong`, `MobileNo`) and full NBFC master sheets
 /// (`LOAN_ID`, `APPLICANT_NAME`, `SANCTION_AMOUNT`, `ROI`, `TENURE`, `MOB`, `DPD`, `PROPERTY_LATLONG`, etc.).
 class ExcelImportScreen extends StatefulWidget {
   const ExcelImportScreen({super.key});
@@ -22,6 +21,7 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
   ExcelParseResult? _parseResult;
   LoanProductModel? _selectedProduct;
   String _selectedAgentId = 'uid_agent_karthik';
+  bool _overwriteExisting = false;
   bool _committing = false;
 
   Future<void> _pickExcel(LoanPortfolioProvider portfolio) async {
@@ -37,6 +37,38 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
     });
   }
 
+  Future<void> _clearDemoData(LoanPortfolioProvider portfolio) async {
+    final repo = portfolio.repository;
+    if (repo is! InMemoryDemoLoanService) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear Demo Portfolio Data?'),
+        content: const Text(
+          'This removes all current sample/imported borrowers, loans, schedules, and transactions in Demo Sandbox so you can import fresh data cleanly.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear Data'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    repo.clearAllData();
+    setState(() => _parseResult = null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Demo portfolio cleared in 1 tap. Ready for fresh import.'),
+      ),
+    );
+  }
+
   Future<void> _commit(
     LoanPortfolioProvider portfolio,
     AuthService auth,
@@ -46,6 +78,29 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
         (portfolio.products.isNotEmpty ? portfolio.products.first : null);
     if (parse == null || product == null) return;
 
+    if (_overwriteExisting) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Overwrite Existing Records?'),
+          content: const Text(
+            'Overwrite mode clears existing demo/portfolio entries before committing the new file. Choose Append if you want to keep existing records.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Overwrite & Import'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+
     setState(() => _committing = true);
     try {
       final count = await ExcelImportService.commitImport(
@@ -54,12 +109,13 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
         defaultProduct: product,
         assignedAgentId: _selectedAgentId,
         importedByUid: auth.currentUser?.uid ?? 'uid_admin_meena',
+        overwriteExisting: _overwriteExisting,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Imported $count loan(s) with schedules & disbursement ledger entries.',
+            'Imported $count loan(s) (${_overwriteExisting ? "Overwrite" : "Append"} mode) with schedules & disbursement ledger entries.',
           ),
         ),
       );
@@ -148,11 +204,37 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
                         },
                       ),
                     ),
+                    SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment<bool>(
+                          value: false,
+                          icon: Icon(Icons.playlist_add),
+                          label: Text('Append'),
+                        ),
+                        ButtonSegment<bool>(
+                          value: true,
+                          icon: Icon(Icons.find_replace),
+                          label: Text('Overwrite'),
+                        ),
+                      ],
+                      selected: <bool>{_overwriteExisting},
+                      onSelectionChanged: (selection) {
+                        if (selection.isNotEmpty) {
+                          setState(() => _overwriteExisting = selection.first);
+                        }
+                      },
+                    ),
                     FilledButton.icon(
                       onPressed: () => _pickExcel(portfolio),
                       icon: const Icon(Icons.upload_file),
                       label: const Text('Select .xlsx / .csv File'),
                     ),
+                    if (portfolio.isDemoMode)
+                      OutlinedButton.icon(
+                        onPressed: () => _clearDemoData(portfolio),
+                        icon: const Icon(Icons.delete_sweep_outlined),
+                        label: const Text('Clear Demo Data'),
+                      ),
                   ],
                 ),
               ],
@@ -173,7 +255,8 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
                       Expanded(
                         child: Text(
                           'Preview: ${_parseResult!.fileName} '
-                          '(${_parseResult!.validCount} valid / ${_parseResult!.rows.length} rows)',
+                          '(${_parseResult!.validCount} valid / ${_parseResult!.rows.length} rows) • '
+                          'Mode: ${_overwriteExisting ? "Overwrite" : "Append"}',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
