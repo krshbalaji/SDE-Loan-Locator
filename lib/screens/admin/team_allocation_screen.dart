@@ -5,7 +5,6 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_loan_service.dart';
 import '../../utils/indian_formatters.dart';
-import '../../utils/omni_search.dart';
 
 class TeamAllocationScreen extends StatefulWidget {
   const TeamAllocationScreen({super.key});
@@ -20,6 +19,81 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
   final Set<String> _selectedLoanIds = {};
   bool _assigning = false;
 
+  Widget _buildFeaturePicker({
+    required StateSetter setStateDialog,
+    required UserRole selectedRole,
+    required Set<AppFeature> selectedFeatures,
+    required bool canEditFeatures,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Allotted Features & Modules',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            if (canEditFeatures)
+              TextButton.icon(
+                onPressed: () => setStateDialog(() {
+                  selectedFeatures
+                    ..clear()
+                    ..addAll(AppFeature.defaultsForRole(selectedRole));
+                }),
+                icon: const Icon(Icons.restore, size: 15),
+                label: const Text(
+                  'Reset to Role Defaults',
+                  style: TextStyle(fontSize: 11),
+                ),
+              ),
+          ],
+        ),
+        const Text(
+          'Default modules are pre-selected for each hierarchy level. Super Admin can customize per user.',
+          style: TextStyle(fontSize: 11, color: Colors.black54),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          constraints: const BoxConstraints(maxHeight: 220),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final feat in AppFeature.values)
+                CheckboxListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  title: Text(
+                    feat.label,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  value: selectedRole == UserRole.superAdmin ||
+                      selectedFeatures.contains(feat),
+                  onChanged: (!canEditFeatures || selectedRole == UserRole.superAdmin)
+                      ? null
+                      : (checked) {
+                          setStateDialog(() {
+                            if (checked == true) {
+                              selectedFeatures.add(feat);
+                            } else {
+                              selectedFeatures.remove(feat);
+                            }
+                          });
+                        },
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _showEditStaffDialog(AuthService auth, AppUser staff) async {
     final nameCtrl = TextEditingController(text: staff.displayName);
     final phoneCtrl = TextEditingController(text: staff.phone);
@@ -27,6 +101,9 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
     final branchCtrl = TextEditingController(text: staff.branch);
     var selectedRole = staff.role;
     var isActive = staff.isActive;
+    final selectedFeatures = Set<AppFeature>.from(staff.effectiveFeatures);
+    final canEditFeatures = auth.currentUser?.isSuperAdmin == true ||
+        auth.currentUser?.isExecutive == true;
 
     await showDialog<void>(
       context: context,
@@ -34,7 +111,7 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
         builder: (ctx, setStateDialog) => AlertDialog(
           title: Text('Edit Staff • ${staff.displayName}'),
           content: SizedBox(
-            width: 420,
+            width: 440,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -50,7 +127,14 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                             DropdownMenuItem(value: r, child: Text(r.label)))
                         .toList(),
                     onChanged: (v) {
-                      if (v != null) setStateDialog(() => selectedRole = v);
+                      if (v != null) {
+                        setStateDialog(() {
+                          selectedRole = v;
+                          selectedFeatures
+                            ..clear()
+                            ..addAll(AppFeature.defaultsForRole(v));
+                        });
+                      }
                     },
                   ),
                   const SizedBox(height: 10),
@@ -102,6 +186,12 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                     value: isActive,
                     onChanged: (v) => setStateDialog(() => isActive = v),
                   ),
+                  _buildFeaturePicker(
+                    setStateDialog: setStateDialog,
+                    selectedRole: selectedRole,
+                    selectedFeatures: selectedFeatures,
+                    canEditFeatures: canEditFeatures,
+                  ),
                 ],
               ),
             ),
@@ -122,10 +212,12 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                     zone: zoneCtrl.text.trim(),
                     branch: branchCtrl.text.trim().toUpperCase(),
                     isActive: isActive,
+                    allowedFeatures: selectedRole == UserRole.superAdmin
+                        ? AppFeature.defaultsForRole(UserRole.superAdmin)
+                        : selectedFeatures.toList(),
                   ),
                 );
                 if (ctx.mounted) Navigator.pop(ctx);
-                
               },
               child: const Text('Save Changes'),
             ),
@@ -150,16 +242,24 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
     final branchCtrl = TextEditingController(
       text: creator.isExecutive ? 'MADURAI' : creator.branch,
     );
-    var selectedRole = allowedRoles.last;
+    var selectedRole =
+        creator.isSuperAdmin ? UserRole.branchManager : allowedRoles.last;
+    final selectedFeatures =
+        Set<AppFeature>.from(AppFeature.defaultsForRole(selectedRole));
+    final canEditFeatures = creator.isSuperAdmin || creator.isExecutive;
     var saving = false;
 
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setStateDialog) => AlertDialog(
-          title: const Text('Create Staff Account (In-App)'),
+          title: Text(
+            creator.isSuperAdmin
+                ? 'Super Admin — Create User & Allot Features'
+                : 'Create Staff Account (In-App)',
+          ),
           content: SizedBox(
-            width: 420,
+            width: 440,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -175,7 +275,14 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                             DropdownMenuItem(value: r, child: Text(r.label)))
                         .toList(),
                     onChanged: (v) {
-                      if (v != null) setStateDialog(() => selectedRole = v);
+                      if (v != null) {
+                        setStateDialog(() {
+                          selectedRole = v;
+                          selectedFeatures
+                            ..clear()
+                            ..addAll(AppFeature.defaultsForRole(v));
+                        });
+                      }
                     },
                   ),
                   const SizedBox(height: 10),
@@ -192,7 +299,7 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
                       labelText: 'Login Email *',
-                      hintText: 'agent.name@sde-finance.in',
+                      hintText: 'officer.name@sde-finance.in',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -238,6 +345,12 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                       ),
                     ],
                   ),
+                  _buildFeaturePicker(
+                    setStateDialog: setStateDialog,
+                    selectedRole: selectedRole,
+                    selectedFeatures: selectedFeatures,
+                    canEditFeatures: canEditFeatures,
+                  ),
                 ],
               ),
             ),
@@ -273,13 +386,16 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                           phone: phoneCtrl.text,
                           zone: zoneCtrl.text,
                           branch: branchCtrl.text,
+                          allowedFeatures: selectedRole == UserRole.superAdmin
+                              ? AppFeature.defaultsForRole(UserRole.superAdmin)
+                              : selectedFeatures.toList(),
                         );
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                'Created ${created.role.label}: ${created.displayName} (${created.branch})',
+                                'Created ${created.role.label}: ${created.displayName} (${created.effectiveFeatures.length} features)',
                               ),
                             ),
                           );
@@ -307,35 +423,72 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
     final auth = context.watch<AuthService>();
     final portfolio = context.watch<LoanPortfolioProvider>();
     final user = auth.currentUser!;
+    final staffList = auth.allStaff;
     final agents = auth.activeAgents;
-
-    if (_selectedAgentUid == null && agents.isNotEmpty) {
-      _selectedAgentUid = agents.first.uid;
-    }
-
-    final scopedLoans = auth.visibleLoansFor(
+    final visibleLoans = auth.visibleLoansFor(
       portfolio.loans,
       portfolio.borrowers,
     );
-    final matchingLoans = scopedLoans.where((loan) {
-      final b = portfolio.borrowerById(loan.borrowerId);
-      return OmniSearchEngine.matches(
-        loan: loan,
-        borrower: b,
-        query: _areaFilter,
-      );
-    }).toList();
+    final borrowerMap = {
+      for (final b in portfolio.borrowers) b.borrowerId: b,
+    };
 
-    final discoveredAreas = portfolio.borrowers
-        .map((b) => (b.branch ?? '').trim())
-        .where((s) => s.isNotEmpty)
-        .toSet()
-        .toList()
+    final discoveredAreas = <String>{
+      for (final b in portfolio.borrowers) ...[
+        if ((b.branch ?? '').trim().isNotEmpty) b.branch!.trim().toUpperCase(),
+        if ((b.pincode ?? '').trim().isNotEmpty) b.pincode!.trim(),
+      ],
+    }.toList()
       ..sort();
 
+    final filteredLoans = visibleLoans.where((loan) {
+      if (_areaFilter.trim().isEmpty) return true;
+      final q = _areaFilter.trim().toLowerCase();
+      final b = borrowerMap[loan.borrowerId];
+      final haystack = [
+        loan.loanId,
+        loan.applicationNo,
+        b?.fullName ?? '',
+        b?.branch ?? '',
+        b?.pincode ?? '',
+        b?.addressText ?? '',
+      ].join(' ').toLowerCase();
+      return haystack.contains(q);
+    }).toList();
+
     return ListView(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       children: [
+        if (user.isExecutive)
+          Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: SwitchListTile(
+              title: const Text(
+                'Demo Check-In / Sandbox Access (Global)',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                auth.demoLoginEnabled
+                    ? 'Demo Sandbox login is ON across sessions.'
+                    : 'Demo Sandbox login is OFF across sessions and new browser windows.',
+              ),
+              value: auth.demoLoginEnabled,
+              onChanged: (val) async {
+                await auth.setDemoLoginEnabled(val);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        val
+                            ? 'Demo Sandbox login enabled.'
+                            : 'Demo Sandbox login turned OFF.',
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
+          ),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(14),
@@ -345,26 +498,24 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Hierarchy & Staff Directory (${auth.allStaff.length})',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Hierarchy & Staff Directory (${staffList.length})',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Signed in as ${user.role.label} • ${user.effectiveFeatures.length}/${AppFeature.values.length} features active',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
                           ),
-                          Text(
-                            'Signed in as ${user.role.label} • Scope: ${user.isExecutive ? "All Branches" : user.branch}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.black54,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                     if (user.creatableRoles.isNotEmpty)
                       FilledButton.icon(
@@ -375,9 +526,8 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                   ],
                 ),
                 const Divider(height: 20),
-                for (final staff in auth.allStaff)
+                for (final staff in staffList)
                   ListTile(
-                    dense: true,
                     contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(
                       backgroundColor: staff.isActive
@@ -403,14 +553,16 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                       ),
                     ),
                     subtitle: Text(
-                      '${staff.email} • Branch: ${staff.branch} • Zone: ${staff.zone}',
+                      '${staff.email} • ${staff.branch} • ${staff.effectiveFeatures.length} features',
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (user.isExecutive || user.role.rank > staff.role.rank)
+                        if (user.isSuperAdmin ||
+                            user.isExecutive ||
+                            user.role.rank > staff.role.rank)
                           IconButton(
-                            tooltip: 'Edit Staff Details',
+                            tooltip: 'Edit Staff & Features',
                             icon: const Icon(Icons.edit_outlined, size: 19),
                             onPressed: () => _showEditStaffDialog(auth, staff),
                           ),
@@ -489,7 +641,8 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                 ],
                 TextField(
                   decoration: InputDecoration(
-                    labelText: 'Filter by Area, Pincode, Customer Name, or Loan No',
+                    labelText:
+                        'Filter by Area, Pincode, Customer Name, or Loan No',
                     prefixIcon: const Icon(Icons.travel_explore),
                     border: const OutlineInputBorder(),
                     isDense: true,
@@ -531,80 +684,69 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                             setState(() => _selectedAgentUid = v),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     FilledButton.icon(
-                      onPressed: _assigning ||
-                              _selectedAgentUid == null ||
-                              matchingLoans.isEmpty
+                      onPressed: (_assigning ||
+                              _selectedLoanIds.isEmpty ||
+                              _selectedAgentUid == null)
                           ? null
                           : () async {
                               setState(() => _assigning = true);
-                              final idsToAssign = _selectedLoanIds.isNotEmpty
-                                  ? _selectedLoanIds.toList()
-                                  : matchingLoans.map((l) => l.loanId).toList();
-                              final count =
-                                  await portfolio.assignAccountsToAgent(
-                                loanIds: idsToAssign,
-                                targetAgentUid: _selectedAgentUid!,
-                              );
-                              setState(() {
-                                _assigning = false;
+                              try {
+                                await portfolio.assignAccountsToAgent(
+                                  loanIds: _selectedLoanIds.toList(),
+                                  targetAgentUid: _selectedAgentUid!,
+                                );
                                 _selectedLoanIds.clear();
-                              });
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Assigned $count accounts to ${auth.knownAgentNames[_selectedAgentUid!] ?? _selectedAgentUid}.',
-                                  ),
-                                ),
-                              );
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Accounts assigned.'),
+                                    ),
+                                  );
+                                }
+                              } finally {
+                                if (mounted) {
+                                  setState(() => _assigning = false);
+                                }
+                              }
                             },
                       icon: const Icon(Icons.assignment_ind, size: 18),
                       label: Text(
-                        _selectedLoanIds.isNotEmpty
-                            ? 'Assign Selected (${_selectedLoanIds.length})'
-                            : 'Assign All (${matchingLoans.length})',
+                        _assigning
+                            ? 'Assigning...'
+                            : 'Assign (${_selectedLoanIds.length})',
                       ),
                     ),
                   ],
                 ),
-                const Divider(height: 20),
-                for (final loan in matchingLoans) ...[
-                  Builder(
-                    builder: (context) {
-                      final b = portfolio.borrowerById(loan.borrowerId);
-                      final isChecked = _selectedLoanIds.contains(loan.loanId);
-                      final currentOwner =
-                          auth.knownAgentNames[loan.assignedAgentId] ??
-                              loan.assignedAgentId;
-                      return CheckboxListTile(
-                        dense: true,
-                        value: isChecked,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          '${b?.fullName ?? loan.borrowerId} • ${loan.loanId}',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          'Area: ${b?.branch ?? "-"} ${b?.pincode ?? ""} • DPD: ${loan.dpd} • '
-                          'POS: ${IndianFormatters.formatInr(loan.principalOutstanding, showDecimals: false)} • '
-                          'Owner: $currentOwner',
-                        ),
-                        onChanged: (val) {
-                          setState(() {
-                            if (val == true) {
-                              _selectedLoanIds.add(loan.loanId);
-                            } else {
-                              _selectedLoanIds.remove(loan.loanId);
-                            }
-                          });
-                        },
-                      );
+                const SizedBox(height: 10),
+                for (final loan in filteredLoans)
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    value: _selectedLoanIds.contains(loan.loanId),
+                    onChanged: (checked) {
+                      setState(() {
+                        if (checked == true) {
+                          _selectedLoanIds.add(loan.loanId);
+                        } else {
+                          _selectedLoanIds.remove(loan.loanId);
+                        }
+                      });
                     },
+                    title: Text(
+                      '${borrowerMap[loan.borrowerId]?.fullName ?? loan.borrowerId} • ${loan.loanId}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${borrowerMap[loan.borrowerId]?.branch ?? '—'} • Pos: ${IndianFormatters.formatInr(loan.principalOutstanding)} • DPD: ${loan.dpd}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
                   ),
-                ],
               ],
             ),
           ),
@@ -613,13 +755,4 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
     );
   }
 }
-
-
-
-
-
-
-
-
-
 

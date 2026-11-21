@@ -75,13 +75,39 @@ class LoanLocatorApp extends StatelessWidget {
   }
 }
 
-class _AuthGate extends StatelessWidget {
+class _AuthGate extends StatefulWidget {
   const _AuthGate();
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  String? _lastSessionKey;
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
     final user = auth.currentUser;
+    final sessionKey = user == null
+        ? 'SIGNED_OUT'
+        : '${user.uid}_${auth.isDemoSession ? "DEMO" : "LIVE"}';
+
+    if (sessionKey != _lastSessionKey) {
+      _lastSessionKey = sessionKey;
+      if (user != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final portfolio = context.read<LoanPortfolioProvider>();
+          if (auth.isDemoSession || !auth.useFirebase) {
+            portfolio.switchToDemoSandbox();
+          } else {
+            portfolio.switchToLiveFirestore();
+          }
+        });
+      }
+    }
+
     if (user == null) {
       return const LoginScreen();
     }

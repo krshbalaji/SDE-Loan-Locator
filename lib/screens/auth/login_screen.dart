@@ -159,13 +159,30 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: auth.isLoading
-                          ? null
-                          : () => auth.switchToDemoSandbox(),
-                      icon: const Icon(Icons.play_circle_outline),
-                      label: const Text('Demo Check-In (Tester Sandbox)'),
-                    ),
+                    if (auth.demoLoginEnabled || !auth.useFirebase)
+                      OutlinedButton.icon(
+                        onPressed: auth.isLoading
+                            ? null
+                            : () {
+                                context.read<LoanPortfolioProvider>().switchToDemoSandbox();
+                                auth.switchToDemoSandbox();
+                              },
+                        icon: const Icon(Icons.play_circle_outline),
+                        label: const Text('Demo Check-In (Tester Sandbox)'),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Demo Sandbox disabled by Super Admin. Sign in with your official email.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
+                      ),
                     if (!auth.useFirebase) ...[
                       const Divider(height: 28),
                       Text(
@@ -205,6 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
 
 
 

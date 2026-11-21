@@ -17,6 +17,11 @@ class AuthService extends ChangeNotifier {
   List<AppUser> _staffDirectory = [];
   bool _isLoading = false;
   String? _errorMessage;
+  bool _demoLoginEnabled = true;
+  bool _isDemoSession = false;
+
+  bool get demoLoginEnabled => _demoLoginEnabled;
+  bool get isDemoSession => _isDemoSession;
 
   AppUser? get currentUser => _currentUser;
   List<AppUser> get staffDirectory => List.unmodifiable(_staffDirectory);
@@ -154,11 +159,39 @@ class AuthService extends ChangeNotifier {
     return target.contains(b);
   }
 
+  Future<void> refreshGlobalSettings() async {
+    if (!useFirebase) return;
+    try {
+      final cfg = await FirebaseFirestore.instance.collection('app_config').doc('settings').get();
+      if (cfg.exists && cfg.data() != null && cfg.data()!.containsKey('demo_login_enabled')) {
+        _demoLoginEnabled = cfg.data()!['demo_login_enabled'] as bool? ?? true;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> setDemoLoginEnabled(bool enabled) async {
+    _demoLoginEnabled = enabled;
+    if (!enabled) {
+      _staffDirectory = _staffDirectory
+          .map((u) => u.uid.startsWith('uid_demo_') ? u.copyWith(isActive: false) : u)
+          .toList();
+    }
+    notifyListeners();
+    if (!useFirebase) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('app_config')
+          .doc('settings')
+          .set({'demo_login_enabled': enabled}, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
   Future<void> init() async {
     if (!useFirebase) {
       _staffDirectory = List<AppUser>.from(demoUsers);
       return;
     }
+    await refreshGlobalSettings();
     final fbUser = FirebaseAuth.instance.currentUser;
     if (fbUser != null) {
       final resolved = await _resolveFirebaseUser(fbUser);
@@ -166,6 +199,7 @@ class AuthService extends ChangeNotifier {
         await signOut();
         return;
       }
+      _isDemoSession = false;
       _currentUser = resolved;
       await refreshStaffDirectory();
       notifyListeners();
@@ -239,6 +273,7 @@ class AuthService extends ChangeNotifier {
             'Account suspended. Contact your Branch Manager or MD/CEO.';
         return false;
       }
+      _isDemoSession = false;
       _currentUser = resolved;
       await refreshStaffDirectory();
       return true;
@@ -264,6 +299,7 @@ class AuthService extends ChangeNotifier {
     required String phone,
     required String zone,
     required String branch,
+    List<AppFeature>? allowedFeatures,
   }) async {
     final creator = _currentUser;
     if (creator == null || !creator.creatableRoles.contains(role)) {
@@ -282,6 +318,7 @@ class AuthService extends ChangeNotifier {
         branch: branch.trim().toUpperCase(),
         reportingManagerId: creator.uid,
         isActive: true,
+        allowedFeatures: allowedFeatures ?? AppFeature.defaultsForRole(role),
       );
       _staffDirectory = [...allStaff, created];
       notifyListeners();
@@ -313,6 +350,7 @@ class AuthService extends ChangeNotifier {
         branch: branch.trim().toUpperCase(),
         reportingManagerId: creator.uid,
         isActive: true,
+        allowedFeatures: allowedFeatures ?? AppFeature.defaultsForRole(role),
       );
 
       await FirebaseFirestore.instance
@@ -405,6 +443,12 @@ class AuthService extends ChangeNotifier {
   }
 
   void switchToDemoSandbox() {
+    if (!_demoLoginEnabled) {
+      _errorMessage = 'Demo Sandbox has been disabled by Super Admin.';
+      notifyListeners();
+      return;
+    }
+    _isDemoSession = true;
     _currentUser = demoUsers.firstWhere(
       (u) => u.email == 'demo@sde-finance.in',
       orElse: () => demoUsers.first,
@@ -414,6 +458,12 @@ class AuthService extends ChangeNotifier {
   }
 
   void signInAsDemoUser(AppUser user) {
+    if (!_demoLoginEnabled) {
+      _errorMessage = 'Demo Sandbox has been disabled by Super Admin.';
+      notifyListeners();
+      return;
+    }
+    _isDemoSession = true;
     _errorMessage = null;
     _currentUser = user;
     notifyListeners();
@@ -467,6 +517,7 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 }
+
 
 
 
