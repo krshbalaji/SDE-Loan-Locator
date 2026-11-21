@@ -14,8 +14,8 @@ class BeatStop {
   });
 
   final int sequence;
-  final LoanAccount loan;
-  final Borrower? borrower;
+  final LoanModel loan;
+  final BorrowerModel? borrower;
   final double legDistanceKm;
   final double cumulativeDistanceKm;
   final int estimatedMinutes;
@@ -40,7 +40,6 @@ class BeatRoutePlan {
 class BeatRoutePlanner {
   BeatRoutePlanner._();
 
-  // Default origin: Madurai central coordinates
   static const double defaultOriginLat = 9.9252;
   static const double defaultOriginLng = 78.1198;
 
@@ -62,14 +61,14 @@ class BeatRoutePlanner {
   static double _degToRad(double deg) => deg * (pi / 180.0);
 
   static BeatRoutePlan planRoute({
-    required List<LoanAccount> loans,
-    required Map<String, Borrower> borrowerMap,
+    required List<LoanModel> loans,
+    required Map<String, BorrowerModel> borrowerMap,
     double originLat = defaultOriginLat,
     double originLng = defaultOriginLng,
     double avgSpeedKmh = 22.0,
     int stopMinutes = 12,
   }) {
-    final candidates = <({LoanAccount loan, Borrower borrower, double lat, double lng})>[];
+    final candidates = <({LoanModel loan, BorrowerModel borrower, double lat, double lng})>[];
     var skipped = 0;
 
     for (final loan in loans) {
@@ -98,7 +97,6 @@ class BeatRoutePlanner {
       for (var i = 0; i < remaining.length; i++) {
         final item = remaining[i];
         final distKm = haversineKm(curLat, curLng, item.lat, item.lng);
-        // Slightly favor higher DPD accounts within nearby clusters
         final dpdDiscount = (item.loan.dpd.clamp(0, 180) / 180.0) * 1.25;
         final score = max(0.05, distKm - dpdDiscount);
         if (score < bestScore) {

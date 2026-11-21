@@ -6,8 +6,8 @@ class ReceiptAndReminder {
   ReceiptAndReminder._();
 
   static String buildDigitalReceipt({
-    required LoanAccount loan,
-    required Borrower? borrower,
+    required LoanModel loan,
+    required BorrowerModel? borrower,
     required double amountReceived,
     required String paymentMode,
     required String collectedBy,
@@ -35,26 +35,27 @@ class ReceiptAndReminder {
   }
 
   static String buildEnglishReminder({
-    required LoanAccount loan,
-    required Borrower? borrower,
+    required LoanModel loan,
+    required BorrowerModel? borrower,
   }) {
     final name = borrower?.fullName ?? 'Customer';
     final dueAmt = IndianFormatters.formatInr(
-      loan.overdueAmount > 0 ? loan.overdueAmount : loan.emiAmount,
+      loan.emiAmount,
     );
     return 'Dear $name, friendly reminder for Loan ${loan.loanId} (DPD: ${loan.dpd} days). '
         'Due / Overdue Amount: $dueAmt. Please share payment / PTP confirmation with Saro Devi Enterprises field team.';
   }
 
   static String buildTamilReminder({
-    required LoanAccount loan,
-    required Borrower? borrower,
+    required LoanModel loan,
+    required BorrowerModel? borrower,
   }) {
     final name = borrower?.fullName ?? 'வாடிக்கையாளர்';
     final dueAmt = IndianFormatters.formatInr(
-      loan.overdueAmount > 0 ? loan.overdueAmount : loan.emiAmount,
+      loan.emiAmount,
     );
     return 'வணக்கம் $name, கடன் எண் ${loan.loanId} (DPD: ${loan.dpd} நாட்கள்) நிலுவைத் தொகை $dueAmt. '
         'கட்டண விவரம் அல்லது உறுதிப்படுத்திய தேதியை (PTP) சாரோ தேவி எண்டர்பிரைசஸ் களக் குழுவிடம் தெரிவிக்கவும்.';
   }
 }
+
