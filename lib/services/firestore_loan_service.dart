@@ -1004,12 +1004,30 @@ class InMemoryDemoLoanService implements LoanDataRepository {
 class LoanPortfolioProvider extends ChangeNotifier {
   LoanPortfolioProvider({
     required LoanDataRepository repository,
-    required this.isDemoMode,
-  }) : _repository = repository;
+    required bool isDemoMode,
+  })  : _repository = repository,
+        _isDemoMode = isDemoMode;
 
-  final LoanDataRepository _repository;
-  final bool isDemoMode;
+  LoanDataRepository _repository;
+  bool _isDemoMode;
+  bool get isDemoMode => _isDemoMode;
   LoanDataRepository get repository => _repository;
+
+  Future<void> switchToDemoSandbox() async {
+    if (_repository is! InMemoryDemoLoanService) {
+      _repository = InMemoryDemoLoanService();
+    }
+    _isDemoMode = true;
+    await refresh();
+  }
+
+  Future<void> switchToLiveFirestore() async {
+    if (_repository is! FirestoreLoanService) {
+      _repository = FirestoreLoanService();
+    }
+    _isDemoMode = false;
+    await refresh();
+  }
 
   bool _isLoading = false;
   String? _error;
@@ -1559,6 +1577,7 @@ class LoanPortfolioProvider extends ChangeNotifier {
     return updatedCount;
   }
 }
+
 
 
 

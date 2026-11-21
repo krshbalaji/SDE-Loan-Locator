@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/firestore_loan_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,7 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleLogin() async {
     final auth = context.read<AuthService>();
-    final ok = await auth.signInWithEmailPassword(
+    if (auth.useFirebase) { await context.read<LoanPortfolioProvider>().switchToLiveFirestore(); } final ok = await auth.signInWithEmailPassword(
       _emailController.text,
       _passwordController.text,
     );
@@ -189,7 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 size: 16,
                               ),
                               label: Text(user.displayName.split(' (').first),
-                              onPressed: () => auth.signInAsDemoUser(user),
+                              onPressed: () { context.read<LoanPortfolioProvider>().switchToDemoSandbox(); auth.signInAsDemoUser(user); },
                             ),
                         ],
                       ),
@@ -204,6 +205,9 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
+
+
 
 
 

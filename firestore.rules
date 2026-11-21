@@ -20,7 +20,7 @@ service cloud.firestore {
     }
 
     function isAdminOrAbove() {
-      return userRole() in ['admin', 'executive', 'super_admin'];
+      return userRole() in ['ceo', 'md', 'area_manager', 'branch_manager', 'admin', 'executive', 'super_admin'];
     }
 
     function isValidIndiaCoords(lat, lng) {
@@ -104,3 +104,4 @@ service cloud.firestore {
     }
   }
 }
+
