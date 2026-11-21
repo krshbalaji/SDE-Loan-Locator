@@ -288,6 +288,10 @@ class FirestoreLoanService implements LoanDataRepository {
 /// Seeded in-memory repository for immediate offline / demo usage when Firebase
 /// credentials are not yet configured.
 class InMemoryDemoLoanService implements LoanDataRepository {
+  InMemoryDemoLoanService() {
+    seedSamplePortfolio();
+  }
+
   void clearAllData() {
     _borrowers.clear();
     _products.clear();
@@ -299,6 +303,7 @@ class InMemoryDemoLoanService implements LoanDataRepository {
 
   void seedSamplePortfolio() {
     if (_loans.isNotEmpty) return;
+    _seedInitialData();
     final now = DateTime.now();
     const prod = LoanProductModel(
       productId: 'PROD_LAP_DEMO',
@@ -401,11 +406,6 @@ class InMemoryDemoLoanService implements LoanDataRepository {
     );
     _loans[l1.loanId] = l1;
     _loans[l2.loanId] = l2;
-  }
-  InMemoryDemoLoanService() {
-    seedSamplePortfolio();
-    seedSamplePortfolio();
-    _seedInitialData();
   }
 
   final Map<String, BorrowerModel> _borrowers = {};
@@ -1577,6 +1577,8 @@ class LoanPortfolioProvider extends ChangeNotifier {
     return updatedCount;
   }
 }
+
+
 
 
 

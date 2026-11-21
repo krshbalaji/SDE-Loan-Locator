@@ -25,7 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleLogin() async {
     final auth = context.read<AuthService>();
-    if (auth.useFirebase) { await context.read<LoanPortfolioProvider>().switchToLiveFirestore(); } final ok = await auth.signInWithEmailPassword(
+    final ok = await auth.signInWithEmailPassword(
       _emailController.text,
       _passwordController.text,
     );
@@ -205,6 +205,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
 
 
 

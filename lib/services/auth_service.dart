@@ -339,16 +339,19 @@ class AuthService extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    _staffDirectory = allStaff
+    final baseList = _staffDirectory.isNotEmpty ? _staffDirectory : demoUsers;
+    _staffDirectory = baseList
         .map((u) => u.uid == updated.uid ? updated : u)
         .toList();
+    if (_currentUser?.uid == updated.uid) {
+      _currentUser = updated;
+    }
     notifyListeners();
     try {
       await FirebaseFirestore.instance
           .collection('users')
           .doc(updated.uid)
           .set(updated.toMap(), SetOptions(merge: true));
-      await refreshStaffDirectory();
     } catch (_) {
       // Keep local state responsive even if Firestore rules/network reject
     }
@@ -464,6 +467,7 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 }
+
 
 
 
