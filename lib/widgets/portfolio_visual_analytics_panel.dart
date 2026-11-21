@@ -674,3 +674,4 @@ class _SummaryPill extends StatelessWidget {
     );
   }
 }
+

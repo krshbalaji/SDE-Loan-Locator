@@ -634,7 +634,7 @@ class ExcelImportService {
           ckycId: row.ckycId,
           cersaiId: row.cersaiId,
           creditScore: row.creditScore,
-          branch: row.branch,
+          branch: (row.branch ?? '').trim().isEmpty ? 'Unassigned' : row.branch!.trim(),
           pincode: row.pincode,
           addressText: row.location.isEmpty ? 'Madurai' : row.location,
           latitude: lat,
@@ -746,6 +746,8 @@ class ExcelImportService {
     return double.tryParse(cleaned);
   }
 }
+
+
 
 
 
