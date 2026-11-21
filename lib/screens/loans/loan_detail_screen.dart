@@ -17,6 +17,7 @@ import '../../services/firestore_loan_service.dart';
 import '../../services/location_service.dart';
 import '../../services/pdf_export_service.dart';
 import '../../utils/indian_formatters.dart';
+import '../../utils/receipt_and_reminder.dart';
 import '../../widgets/ptp_log_bottom_sheet.dart';
 import 'what_if_simulator_screen.dart';
 
@@ -389,6 +390,62 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                 _buildBalanceAndPieCard(loan, visibleSchedule),
                 const SizedBox(height: 10),
                 _buildUnderwritingStrip(borrower, loan),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        final msg = ReceiptAndReminder.buildTamilReminder(
+                          loan: loan,
+                          borrower: borrower,
+                        );
+                        showDialog<void>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Tamil Payment Reminder'),
+                            content: SingleChildScrollView(child: SelectableText(msg)),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text('Close'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.translate, size: 18),
+                      label: const Text('Tamil Reminder'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        final receipt = ReceiptAndReminder.buildDigitalReceipt(
+                          loan: loan,
+                          borrower: borrower,
+                          amountReceived: loan.emiAmount,
+                          paymentMode: 'UPI / Field',
+                          collectedBy: auth.currentUser?.displayName ?? 'Field Officer',
+                        );
+                        showDialog<void>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Digital Receipt Preview'),
+                            content: SingleChildScrollView(child: SelectableText(receipt)),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text('Close'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                      label: const Text('Digital Receipt'),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
@@ -1176,6 +1233,9 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     );
   }
 }
+
+
+
 
 
 

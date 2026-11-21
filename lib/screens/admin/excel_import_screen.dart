@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/loan_model.dart';
 import '../../models/loan_product_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/excel_import_service.dart';
 import '../../services/firestore_loan_service.dart';
 import '../../utils/indian_formatters.dart';
+import '../../utils/import_dry_run_validator.dart';
 
 /// Bulk Excel (.xlsx) & NBFC Master (.csv) import screen supporting both simple sheets
 /// (`Location`, `ApplicationNo`, `LoanNo`, `CustomerName`, `Amount`, `LatLong`, `MobileNo`) and full NBFC master sheets
@@ -257,7 +259,33 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
                       Expanded(
                         child: Text(
                           'Preview: ${_parseResult!.fileName} '
-                          '(${_parseResult!.validCount} valid / ${_parseResult!.rows.length} rows) • '
+                          '(${_parseResult!.validCount} valid / ${_parseResult!.rows.length} rows • ${ImportDryRunValidator.validateLoans(rows: _parseResult!.rows.where((r) => r.isValid).map((r) {
+    final now = DateTime.now();
+    final tenure = r.tenureInstallments > 0 ? r.tenureInstallments : 12;
+    final roi = r.customRoi ?? 12.0;
+    final emi = r.amount / tenure;
+    return LoanModel(
+      loanId: r.loanNo.trim(),
+      applicationNo: r.applicationNo.trim().isEmpty ? r.loanNo.trim() : r.applicationNo.trim(),
+      borrowerId: r.mobilePrimary.trim(),
+      productId: _selectedProduct?.productId ?? 'PROD_DEFAULT',
+      assignedAgentId: _selectedAgentId,
+      principalSanctioned: r.amount,
+      processingFeeAmount: 0,
+      gstAmount: 0,
+      netDisbursedAmount: r.amount,
+      interestRateAnnual: roi,
+      interestMethod: InterestMethod.reducingBalance,
+      tenureInstallments: tenure,
+      emiAmount: emi,
+      disbursementDate: now,
+      firstDueDate: now.add(const Duration(days: 30)),
+      maturityDate: now.add(Duration(days: 30 * tenure)),
+      principalOutstanding: r.principalOutstandingOverride ?? r.amount,
+      dpd: r.dpd ?? 0,
+      agingBucket: AgingBucket.fromDpd(r.dpd ?? 0),
+    );
+  }).toList()).invalidCount} dry-run issues) • '
                           'Mode: ${_overwriteExisting ? "Overwrite" : "Append"}',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
@@ -317,5 +345,14 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
     );
   }
 }
+
+
+
+
+
+
+
+
+
 
 
