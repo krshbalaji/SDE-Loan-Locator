@@ -12,6 +12,7 @@ import '../../services/pdf_export_service.dart';
 import '../../utils/indian_formatters.dart';
 import '../../widgets/aging_bucket_chart.dart';
 import '../../widgets/portfolio_intelligence_panel.dart';
+import '../../widgets/governance_approvals_panel.dart';
 import '../admin/excel_import_screen.dart';
 import '../admin/team_allocation_screen.dart';
 import '../collections/collections_queue_screen.dart';
@@ -287,6 +288,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
       const CollectionsQueueScreen(),
       const TeamAllocationScreen(),
       const ExcelImportScreen(),
+      GovernanceApprovalsPanel(currentUser: auth.currentUser!),
     ];
 
     return Scaffold(
@@ -665,6 +667,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
     );
   }
 }
+
 
 
 

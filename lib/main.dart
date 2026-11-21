@@ -1,3 +1,4 @@
+import 'services/maker_checker_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -50,6 +51,7 @@ class LoanLocatorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider<MakerCheckerService>(create: (ctx) => MakerCheckerService(useFirebase: useFirebase, auditService: ctx.read<AuditService>())),
         ChangeNotifierProvider<AuditService>(
           create: (_) => AuditService(useFirebase: useFirebase),
         ),
@@ -129,4 +131,5 @@ class _AuthGateState extends State<_AuthGate> {
     return const AgentHomeScreen();
   }
 }
+
 
