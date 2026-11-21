@@ -163,9 +163,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       OutlinedButton.icon(
                         onPressed: auth.isLoading
                             ? null
-                            : () {
-                                context.read<LoanPortfolioProvider>().switchToDemoSandbox();
-                                auth.switchToDemoSandbox();
+                            : () async {
+                                final portfolio = context.read<LoanPortfolioProvider>();
+                                await auth.switchToDemoSandbox();
+                                if (auth.isDemoSession) {
+                                  await portfolio.switchToDemoSandbox();
+                                }
                               },
                         icon: const Icon(Icons.play_circle_outline),
                         label: const Text('Demo Check-In (Tester Sandbox)'),
@@ -222,6 +225,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
 
 
 

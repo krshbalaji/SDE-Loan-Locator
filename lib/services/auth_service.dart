@@ -159,14 +159,44 @@ class AuthService extends ChangeNotifier {
     return target.contains(b);
   }
 
+  bool _settingsListenerAttached = false;
+
+  void _attachGlobalSettingsListener() {
+    if (!useFirebase || _settingsListenerAttached) return;
+    _settingsListenerAttached = true;
+    FirebaseFirestore.instance
+        .collection('app_config')
+        .doc('settings')
+        .snapshots()
+        .listen((cfg) {
+      if (cfg.exists && cfg.data() != null && cfg.data()!.containsKey('demo_login_enabled')) {
+        final next = cfg.data()!['demo_login_enabled'] as bool? ?? true;
+        if (_demoLoginEnabled != next) {
+          _demoLoginEnabled = next;
+          if (!next && _isDemoSession) {
+            _currentUser = null;
+            _isDemoSession = false;
+            _errorMessage = 'Demo Sandbox has been disabled by Super Admin.';
+          }
+          notifyListeners();
+        }
+      }
+    }, onError: (_) {});
+  }
+
   Future<void> refreshGlobalSettings() async {
     if (!useFirebase) return;
+    _attachGlobalSettingsListener();
     try {
-      final cfg = await FirebaseFirestore.instance.collection('app_config').doc('settings').get();
+      final cfg = await FirebaseFirestore.instance
+          .collection('app_config')
+          .doc('settings')
+          .get(const GetOptions(source: Source.serverAndCache));
       if (cfg.exists && cfg.data() != null && cfg.data()!.containsKey('demo_login_enabled')) {
         _demoLoginEnabled = cfg.data()!['demo_login_enabled'] as bool? ?? true;
       }
     } catch (_) {}
+    notifyListeners();
   }
 
   Future<void> setDemoLoginEnabled(bool enabled) async {
@@ -178,12 +208,13 @@ class AuthService extends ChangeNotifier {
     }
     notifyListeners();
     if (!useFirebase) return;
-    try {
-      await FirebaseFirestore.instance
-          .collection('app_config')
-          .doc('settings')
-          .set({'demo_login_enabled': enabled}, SetOptions(merge: true));
-    } catch (_) {}
+    await FirebaseFirestore.instance
+        .collection('app_config')
+        .doc('settings')
+        .set({
+          'demo_login_enabled': enabled,
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
   }
 
   Future<void> init() async {
@@ -442,7 +473,10 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  void switchToDemoSandbox() {
+  Future<void> switchToDemoSandbox() async {
+    if (useFirebase) {
+      await refreshGlobalSettings();
+    }
     if (!_demoLoginEnabled) {
       _errorMessage = 'Demo Sandbox has been disabled by Super Admin.';
       notifyListeners();
@@ -517,6 +551,7 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 }
+
 
 
 
