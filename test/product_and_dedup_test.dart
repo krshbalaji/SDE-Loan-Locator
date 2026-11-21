@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:loan_locator_app/models/borrower_model.dart';
 import 'package:loan_locator_app/models/loan_product_model.dart';
 import 'package:loan_locator_app/services/excel_import_service.dart';
+import 'package:loan_locator_app/services/firestore_loan_service.dart';
 
 void main() {
   group('DefaultLoanProducts presets', () {
@@ -90,6 +91,31 @@ void main() {
         res.rows[2].warnings,
         contains('Existing borrower matched by mobile'),
       );
+    });
+  });
+
+  group('LoanPortfolioProvider.seedDefaultProducts', () {
+    test('seeds default catalog once and preserves existing productId on re-run', () async {
+      final provider = LoanPortfolioProvider(
+        repository: InMemoryDemoLoanService(),
+        isDemoMode: true,
+      );
+      await provider.refresh();
+
+      final customLap = DefaultLoanProducts.primaryDefault.copyWith(
+        annualInterestRate: 10.75,
+      );
+      await provider.saveProduct(customLap);
+
+      final firstSeedCount = await provider.seedDefaultProducts();
+      expect(firstSeedCount, 3);
+      expect(provider.productById('PROD_LAP_STD')?.annualInterestRate, 10.75);
+      expect(provider.productById('PROD_HF_HL'), isNotNull);
+      expect(provider.productById('PROD_LAP_MICRO'), isNotNull);
+      expect(provider.productById('PROD_COLL_DAILY'), isNotNull);
+
+      final secondSeedCount = await provider.seedDefaultProducts();
+      expect(secondSeedCount, 0);
     });
   });
 }

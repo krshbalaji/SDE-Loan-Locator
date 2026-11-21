@@ -704,10 +704,32 @@ class _MasterDashboardState extends State<MasterDashboard> {
                           ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     if (auth.currentUser?.isMaster == true)
-                      FilledButton.tonalIcon(
-                        onPressed: () => _showProductEditorDialog(portfolio),
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text('Add Product'),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              final added = await portfolio.seedDefaultProducts();
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    added == 0
+                                        ? 'All default loan products are already present.'
+                                        : 'Seeded \$added default loan product(s).',
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.playlist_add_check, size: 16),
+                            label: const Text('Seed Presets'),
+                          ),
+                          FilledButton.tonalIcon(
+                            onPressed: () => _showProductEditorDialog(portfolio),
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text('Add Product'),
+                          ),
+                        ],
                       ),
                   ],
                 ),

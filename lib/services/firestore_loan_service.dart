@@ -1138,6 +1138,28 @@ class LoanPortfolioProvider extends ChangeNotifier {
     await refresh();
   }
 
+  Future<int> seedDefaultProducts({
+    List<LoanProductModel> presets = DefaultLoanProducts.catalog,
+    bool overwriteExisting = false,
+  }) async {
+    final existingIds = products.map((p) => p.productId).toSet();
+    var added = 0;
+
+    for (final preset in presets) {
+      if (!overwriteExisting && existingIds.contains(preset.productId)) {
+        continue;
+      }
+      await _repository.saveProduct(preset);
+      added++;
+    }
+
+    if (added > 0) {
+      await refresh();
+    }
+    return added;
+  }
+
+
   /// Creates a new loan, its v1 amortization schedule, and initial immutable disbursement ledger entry.
   Future<void> applyBatchImportState({
     required LoanModel updatedLoan,
