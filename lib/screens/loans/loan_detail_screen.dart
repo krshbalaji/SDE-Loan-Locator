@@ -286,6 +286,9 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     final allSchedule = portfolio.scheduleForLoan(loan.loanId);
     final versions = allSchedule.map((e) => e.scheduleVersion).toSet().toList()
       ..sort((a, b) => b.compareTo(a));
+    final canDeleteLoan =
+        auth.currentUser?.isMaster == true ||
+        auth.currentUser?.isSuperAdmin == true;
     final viewingVersion = _selectedScheduleVersion ?? loan.scheduleVersion;
     final visibleSchedule = allSchedule
         .where((e) => e.scheduleVersion == viewingVersion)
@@ -344,6 +347,32 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                     'KFS_${loan.loanId}.pdf',
                   );
                 },
+              ),
+            if (canDeleteLoan)
+              PopupMenuButton<String>(
+                tooltip: 'More actions',
+                onSelected: (value) async {
+                  if (value == 'delete') {
+                    final deleted = await _confirmLoanDeletion(
+                      context: context,
+                      loan: loan,
+                      borrowerName: borrower?.fullName,
+                    );
+                    if (deleted && context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem<String>(
+                    value: 'delete',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.delete_outline),
+                      title: Text('Delete Loan'),
+                    ),
+                  ),
+                ],
               ),
           ],
           bottom: const TabBar(
@@ -1233,6 +1262,54 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     );
   }
 }
+
+Future<bool> _confirmLoanDeletion({
+  required BuildContext context,
+  required LoanModel loan,
+  String? borrowerName,
+}) async {
+  final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Delete Loan Record?'),
+          content: Text(
+            'Loan ID: ${loan.loanId}\n'
+            'Borrower: ${borrowerName ?? loan.borrowerId}\n'
+            'Total Outstanding: ${IndianFormatters.formatInr(loan.totalOutstanding, showDecimals: false)}\n\n'
+            'This removes the loan, its schedule, and its transactions.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
+  if (!confirmed || !context.mounted) return false;
+
+  try {
+    await context.read<LoanPortfolioProvider>().deleteLoan(loan.loanId);
+    if (!context.mounted) return true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Deleted loan ${loan.loanId}')),
+    );
+    return true;
+  } catch (e) {
+    if (!context.mounted) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to delete ${loan.loanId}: $e')),
+    );
+    return false;
+  }
+}
+
 
 
 

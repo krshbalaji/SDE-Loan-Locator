@@ -617,8 +617,9 @@ class ExcelImportService {
     required String assignedAgentId,
     required String importedByUid,
     ExcelImportMode mode = ExcelImportMode.append,
+    bool? overwriteExisting,
   }) async {
-    if (mode == ExcelImportMode.overwrite && portfolio.repository is InMemoryDemoLoanService) {
+    if ((mode == ExcelImportMode.overwrite || overwriteExisting == true) && portfolio.repository is InMemoryDemoLoanService) {
       (portfolio.repository as InMemoryDemoLoanService).clearAllData();
     }
     var imported = 0;

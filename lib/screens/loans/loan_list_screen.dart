@@ -309,6 +309,9 @@ class _LoanListScreenState extends State<LoanListScreen> {
     final portfolio = context.watch<LoanPortfolioProvider>();
     final auth = context.watch<AuthService>();
 
+    final canDeleteLoan =
+        auth.currentUser?.isMaster == true ||
+        auth.currentUser?.isSuperAdmin == true;
     final roleScoped = widget.agentIdFilter != null
         ? portfolio.loans
             .where((l) => l.assignedAgentId == widget.agentIdFilter)
@@ -407,24 +410,39 @@ class _LoanListScreenState extends State<LoanListScreen> {
                           subtitle: Text(
                             '${loan.loanId} • EMI ${IndianFormatters.formatInr(loan.emiAmount, showDecimals: false)} • ${loan.status.label}',
                           ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                IndianFormatters.formatInr(
-                                  loan.totalOutstanding,
-                                  showDecimals: false,
-                                ),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    IndianFormatters.formatInr(
+                                      loan.totalOutstanding,
+                                      showDecimals: false,
+                                    ),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    'v${loan.scheduleVersion} • ${loan.agingBucket.label}',
+                                    style: TextStyle(fontSize: 11, color: dpdColor),
+                                  ),
+                                ],
                               ),
-                              Text(
-                                'v${loan.scheduleVersion} • ${loan.agingBucket.label}',
-                                style: TextStyle(fontSize: 11, color: dpdColor),
-                              ),
+                              if (canDeleteLoan)
+                                IconButton(
+                                  tooltip: 'Delete Loan',
+                                  icon: const Icon(Icons.delete_outline),
+                                  onPressed: () => _confirmLoanDeletion(
+                                    context: context,
+                                    loan: loan,
+                                    borrowerName: borrower?.fullName,
+                                  ),
+                                ),
                             ],
                           ),
                         ),
@@ -442,6 +460,54 @@ class _LoanListScreenState extends State<LoanListScreen> {
     );
   }
 }
+
+Future<bool> _confirmLoanDeletion({
+  required BuildContext context,
+  required LoanModel loan,
+  String? borrowerName,
+}) async {
+  final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Delete Loan Record?'),
+          content: Text(
+            'Loan ID: ${loan.loanId}\n'
+            'Borrower: ${borrowerName ?? loan.borrowerId}\n'
+            'Total Outstanding: ${IndianFormatters.formatInr(loan.totalOutstanding, showDecimals: false)}\n\n'
+            'This removes the loan, its schedule, and its transactions.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
+  if (!confirmed || !context.mounted) return false;
+
+  try {
+    await context.read<LoanPortfolioProvider>().deleteLoan(loan.loanId);
+    if (!context.mounted) return true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Deleted loan ${loan.loanId}')),
+    );
+    return true;
+  } catch (e) {
+    if (!context.mounted) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to delete ${loan.loanId}: $e')),
+    );
+    return false;
+  }
+}
+
 
 
 

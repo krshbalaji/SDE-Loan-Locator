@@ -510,6 +510,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
           loans: portfolio.loans,
           borrowersById: { for (final b in portfolio.borrowers) b.borrowerId: b },
           products: portfolio.products,
+          transactions: portfolio.transactions,
           selectedSliceKey: _visualSliceKey,
           onSelectSlice: (dim, key) {
             setState(() {
@@ -834,19 +835,165 @@ class _MasterDashboardState extends State<MasterDashboard> {
   }
 }
 
+class _DashboardStoryStrip extends StatelessWidget {
+  const _DashboardStoryStrip({
+    required this.kpi,
+    required this.transactions,
+  });
 
+  final dynamic kpi;
+  final List<dynamic> transactions;
 
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final double par30 = (kpi.par30Percent as num?)?.toDouble() ?? 0.0;
+    final double totalPos = (kpi.totalPrincipalOutstanding as num?)?.toDouble() ?? 0.0;
+    final double par30Amt = (kpi.par30Amount as num?)?.toDouble() ?? 0.0;
+    final double ytdCollected = (kpi.collectedYtd as num?)?.toDouble() ?? 0.0;
 
+    final bool isHighRisk = par30 >= 10.0;
+    final bool isWatch = !isHighRisk && par30 > 0.0;
 
+    final Color statusColor = isHighRisk
+        ? Colors.red.shade700
+        : (isWatch ? Colors.amber.shade800 : Colors.green.shade700);
+    final IconData statusIcon = isHighRisk
+        ? Icons.warning_amber_rounded
+        : (isWatch ? Icons.visibility_rounded : Icons.verified_rounded);
+    final String statusLabel = isHighRisk
+        ? 'Action Needed'
+        : (isWatch ? 'Watch Zone' : 'Healthy Book');
 
+    final double healthyRatio = totalPos <= 0
+        ? 1.0
+        : ((totalPos - par30Amt) / totalPos).clamp(0.0, 1.0);
 
+    final now = DateTime.now();
+    final curMonthStart = DateTime(now.year, now.month, 1);
+    final nextMonthStart = DateTime(now.year, now.month + 1, 1);
+    final prevMonthStart = DateTime(now.year, now.month - 1, 1);
+    final qStartMonth = ((now.month - 1) ~/ 3) * 3 + 1;
+    final curQStart = DateTime(now.year, qStartMonth, 1);
+    final nextQStart = DateTime(now.year, qStartMonth + 3, 1);
+    final prevQStart = DateTime(now.year, qStartMonth - 3, 1);
+    final fyStartYear = now.month >= 4 ? now.year : now.year - 1;
+    final prevFyStart = DateTime(fyStartYear - 1, 4, 1);
+    final prevFySamePoint = DateTime(now.year - 1, now.month, now.day + 1);
 
+    double sumRange(DateTime start, DateTime end) {
+      var total = 0.0;
+      for (final txn in transactions) {
+        try {
+          final dt = txn.createdAt as DateTime;
+          final amt = (txn.totalAmount as num).toDouble();
+          if (!dt.isBefore(start) && dt.isBefore(end)) {
+            total += amt;
+          }
+        } catch (_) {}
+      }
+      return total;
+    }
 
+    String pctBadge(double cur, double prev) {
+      if (prev <= 0) return 'Baseline';
+      final diff = ((cur - prev) / prev) * 100.0;
+      final sign = diff >= 0 ? '+' : '';
+      return '$sign${diff.toStringAsFixed(0)}%';
+    }
 
+    final curM = sumRange(curMonthStart, nextMonthStart);
+    final prevM = sumRange(prevMonthStart, curMonthStart);
+    final curQ = sumRange(curQStart, nextQStart);
+    final prevQ = sumRange(prevQStart, curQStart);
+    final prevYtd = sumRange(prevFyStart, prevFySamePoint);
 
+    final String summaryLine = totalPos <= 0
+        ? 'No active principal loaded yet - import your CRIS sheet to visualize book health.'
+        : '${(healthyRatio * 100).toStringAsFixed(0)}% of principal is outside PAR >30; YTD collection stands at ${IndianFormatters.formatInrCompact(ytdCollected)}.';
 
+    Widget trendPill(String label, String value, {bool alert = false}) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: alert
+              ? scheme.errorContainer.withAlpha(130)
+              : scheme.secondaryContainer.withAlpha(115),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          '$label: $value',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: alert ? scheme.onErrorContainer : scheme.onSecondaryContainer,
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+      );
+    }
 
-
-
-
-
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(statusIcon, color: statusColor, size: 18),
+                const SizedBox(width: 6),
+                Text(
+                  statusLabel,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: statusColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const Spacer(),
+                Text(
+                  '${(healthyRatio * 100).toStringAsFixed(0)}% Non-PAR30',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: healthyRatio,
+                minHeight: 8,
+                backgroundColor: Colors.red.shade100,
+                valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              summaryLine,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurface,
+                  ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                trendPill('MoM', pctBadge(curM, prevM), alert: prevM > 0 && curM < prevM),
+                trendPill('QoQ', pctBadge(curQ, prevQ), alert: prevQ > 0 && curQ < prevQ),
+                trendPill('YoY', pctBadge(ytdCollected, prevYtd), alert: prevYtd > 0 && ytdCollected < prevYtd),
+                trendPill('YTD', IndianFormatters.formatInrCompact(ytdCollected)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

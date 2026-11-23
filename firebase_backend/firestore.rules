@@ -1,5 +1,4 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -7,77 +6,144 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function userRole() {
-      return request.auth.token.role != null
-        ? request.auth.token.role
-        : get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    function isSarodeviAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email != null &&
+        request.auth.token.email.matches('(?i).*sar[ao]devi.*');
     }
 
-    function isMaster() {
-      return isSignedIn() && userRole() == 'MASTER';
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function isAdminOrMaster() {
-      return isSignedIn() && (userRole() == 'MASTER' || userRole() == 'ADMIN');
+    function userDocExists() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function isAssignedAgent(agentId) {
-      return isSignedIn() && request.auth.uid == agentId;
+    function roleFromDoc() {
+      return userDocExists() ? userDoc().role : '';
     }
 
-    // Users / Officer Profiles
-    match /users/{uid} {
-      allow read: if isAdminOrMaster() || (isSignedIn() && request.auth.uid == uid);
-      allow write: if isMaster();
+    function isActiveUser() {
+      return isSarodeviAdmin() ||
+        (userDocExists() && userDoc().is_active != false);
     }
 
-    // Table 1: borrowers
-    match /borrowers/{borrowerId} {
-      allow read: if isAdminOrMaster() || isAssignedAgent(resource.data.assigned_agent_id);
-      allow create: if isAdminOrMaster() || isAssignedAgent(request.resource.data.assigned_agent_id);
-      allow update: if isAdminOrMaster() || isAssignedAgent(resource.data.assigned_agent_id);
-      allow delete: if isMaster();
+    function effectiveRole() {
+      return isSarodeviAdmin()
+        ? 'SUPER_ADMIN'
+        : (request.auth.token.role != null && request.auth.token.role != ''
+            ? request.auth.token.role
+            : roleFromDoc());
     }
 
-    // Table 2: loan_products
+    function isSuperAdmin() {
+      return isActiveUser() && effectiveRole() == 'SUPER_ADMIN';
+    }
+
+    function isExecutive() {
+      return isActiveUser() && effectiveRole() in ['SUPER_ADMIN', 'CEO', 'MD', 'MASTER'];
+    }
+
+    function isAdminOrAbove() {
+      return isActiveUser() && effectiveRole() in [
+        'SUPER_ADMIN',
+        'CEO',
+        'MD',
+        'MASTER',
+        'AREA_MANAGER',
+        'BRANCH_MANAGER',
+        'COLLECTION_MANAGER',
+        'ADMIN'
+      ];
+    }
+
+    function hasFeature(featureCode) {
+      return isExecutive() ||
+        (isActiveUser() &&
+          userDocExists() &&
+          userDoc().allowed_features is list &&
+          featureCode in userDoc().allowed_features);
+    }
+
+    match /app_config/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isExecutive();
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdminOrAbove());
+      allow create: if isSignedIn() && (
+        (
+          request.auth.uid == userId &&
+          !request.resource.data.keys().hasAny(['role', 'is_active', 'allowed_features'])
+        ) ||
+        isSarodeviAdmin() ||
+        (isAdminOrAbove() && hasFeature('TEAM_AND_PERMISSIONS'))
+      );
+      allow update: if isSignedIn() && (
+        (
+          request.auth.uid == userId &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'is_active', 'allowed_features'])
+        ) ||
+        isSarodeviAdmin() ||
+        (isAdminOrAbove() && hasFeature('TEAM_AND_PERMISSIONS'))
+      );
+      allow delete: if isSuperAdmin();
+    }
+
     match /loan_products/{productId} {
-      allow read: if isSignedIn();
-      allow write: if isMaster();
+      allow read: if isActiveUser();
+      allow write: if isExecutive();
     }
 
-    // Table 3: loans
+    match /borrowers/{borrowerId} {
+      allow read: if isActiveUser();
+      allow create: if hasFeature('LOAN_ORIGINATION') || hasFeature('EXCEL_IMPORT_EXPORT');
+      allow update: if isActiveUser() &&
+        (isAdminOrAbove() || resource.data.assigned_agent_id == request.auth.uid);
+      allow delete: if isExecutive();
+    }
+
     match /loans/{loanId} {
-      allow read: if isAdminOrMaster() || isAssignedAgent(resource.data.assigned_agent_id);
-      allow create: if isAdminOrMaster();
-      allow update: if isAdminOrMaster() || isAssignedAgent(resource.data.assigned_agent_id);
-      allow delete: if false; // Loan records are closed or written off, never hard-deleted
+      allow read: if isActiveUser();
+      allow create: if hasFeature('LOAN_ORIGINATION') || hasFeature('EXCEL_IMPORT_EXPORT');
+      allow update: if isActiveUser() &&
+        (isAdminOrAbove() || resource.data.assigned_agent_id == request.auth.uid);
+      allow delete: if isExecutive();
     }
 
-    // Table 4: installment_schedule (Versioned, never deleted)
     match /installment_schedule/{installmentId} {
-      allow read: if isSignedIn();
-      allow create, update: if isAdminOrMaster() || isSignedIn();
-      allow delete: if false; // Restructuring marks old rows SUPERSEDED
+      allow read: if isActiveUser();
+      allow create, update: if hasFeature('LOAN_ORIGINATION') || hasFeature('PAYMENT_COLLECTION') || hasFeature('EXCEL_IMPORT_EXPORT');
+      allow delete: if isExecutive();
     }
 
-    // Table 5: transactions (IMMUTABLE APPEND-ONLY LEDGER)
     match /transactions/{txnId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn()
-        && request.resource.data.total_amount >= 0
-        && (
-          request.resource.data.txn_type != 'REVERSAL'
-          || isMaster()
-        );
-      allow update, delete: if false; // Append-only: reversals MUST insert a REVERSAL contra-entry
+      allow read: if isActiveUser();
+      allow create: if hasFeature('PAYMENT_COLLECTION');
+      allow update, delete: if false;
     }
 
-    // Table 6: collection_logs
     match /collection_logs/{logId} {
-      allow read: if isAdminOrMaster() || isAssignedAgent(resource.data.agent_id);
-      allow create: if isAdminOrMaster() || isAssignedAgent(request.resource.data.agent_id);
-      allow update: if isAdminOrMaster() || isAssignedAgent(resource.data.agent_id);
+      allow read: if isActiveUser();
+      allow create: if hasFeature('COLLECTIONS_QUEUE') || hasFeature('PAYMENT_COLLECTION');
+      allow update: if isAdminOrAbove();
       allow delete: if false;
+    }
+
+    match /maker_checker_requests/{reqId} {
+      allow read: if isActiveUser();
+      allow create: if isActiveUser();
+      allow update: if isAdminOrAbove();
+      allow delete: if false;
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isExecutive();
+      allow create: if isActiveUser();
+      allow update, delete: if false;
     }
   }
 }

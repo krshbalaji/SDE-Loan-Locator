@@ -117,14 +117,24 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
         mode: _importMode,
       );
       if (!mounted) return;
+      final skipped = parse.rows.length - count;
+      final skipNote = skipped > 0 ? ' ($skipped invalid row(s) skipped)' : '';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Imported $count loan(s) (${_overwriteExisting ? "Overwrite" : "Append"} mode) with schedules & disbursement ledger entries.',
+            'Imported $count of ${parse.rows.length} row(s) in ${_overwriteExisting ? "Overwrite" : "Append"} mode$skipNote.',
           ),
         ),
       );
       setState(() => _parseResult = null);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Import stopped: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _committing = false);
     }

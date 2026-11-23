@@ -74,7 +74,10 @@ class IndianFormatters {
   }
 
   /// Rounds money values to 2 decimal places (paise precision).
-  static double roundPaise(double value) => (value * 100).roundToDouble() / 100;
+  static double roundPaise(double value) {
+    if (!value.isFinite) return 0.0;
+    return (value * 100).roundToDouble() / 100;
+  }
 
   /// Computes 18% GST (or custom rate) on processing/penal fees.
   static ({double baseFee, double gstAmount, double totalFee}) computeFeeWithGst({

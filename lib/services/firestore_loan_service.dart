@@ -1,3 +1,5 @@
+import '../models/user_model.dart';
+import 'audit_service.dart';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -45,6 +47,8 @@ abstract class LoanDataRepository {
     required List<InstallmentModel> initialSchedule,
     required TransactionModel disbursementTxn,
   });
+
+  Future<void> deleteLoan(String loanId);
 
   /// Atomically appends an immutable payment transaction, updates schedule & loan balances,
   /// and marks any open PTP for this loan as KEPT.
@@ -160,12 +164,38 @@ class FirestoreLoanService implements LoanDataRepository {
   }) async {
     final batch = _db.batch();
     batch.set(_loans.doc(loan.loanId), _loanToFirestore(loan));
-    // Schedule rows are deterministically derived in-memory from loan terms + transactions
+    for (final row in initialSchedule) {
+      batch.set(_schedule.doc(row.installmentId), _installmentToFirestore(row));
+    }
     batch.set(
       _transactions.doc(disbursementTxn.txnId),
       _txnToFirestore(disbursementTxn),
     );
     await batch.commit();
+  }
+
+  @override
+  Future<void> deleteLoan(String loanId) async {
+    final trimmedId = loanId.trim();
+    if (trimmedId.isEmpty) return;
+
+    final scheduleSnap =
+        await _schedule.where('loanId', isEqualTo: trimmedId).get();
+    final txnSnap =
+        await _transactions.where('loanId', isEqualTo: trimmedId).get();
+
+    final refs = [_loans.doc(trimmedId)];
+    refs.addAll(scheduleSnap.docs.map((d) => d.reference));
+    refs.addAll(txnSnap.docs.map((d) => d.reference));
+
+    const chunkSize = 450;
+    for (var i = 0; i < refs.length; i += chunkSize) {
+      final batch = _db.batch();
+      for (final ref in refs.sublist(i, (i + chunkSize).clamp(0, refs.length))) {
+        batch.delete(ref);
+      }
+      await batch.commit();
+    }
   }
 
   @override
@@ -923,6 +953,16 @@ class InMemoryDemoLoanService implements LoanDataRepository {
   }
 
   @override
+  Future<void> deleteLoan(String loanId) async {
+    final trimmedId = loanId.trim();
+    if (trimmedId.isEmpty) return;
+
+    _loans.remove(trimmedId);
+    _installments.removeWhere((_, row) => row.loanId == trimmedId);
+    _transactions.removeWhere((t) => t.loanId == trimmedId);
+  }
+
+  @override
   Future<void> recordPaymentAtomic({
     required LoanModel updatedLoan,
     required List<InstallmentModel> updatedInstallments,
@@ -1005,10 +1045,16 @@ class LoanPortfolioProvider extends ChangeNotifier {
   LoanPortfolioProvider({
     required LoanDataRepository repository,
     required bool isDemoMode,
+    AuditService? auditService,
+    AppUser? Function()? actorProvider,
   })  : _repository = repository,
-        _isDemoMode = isDemoMode;
+        _isDemoMode = isDemoMode,
+        _auditService = auditService,
+        _actorProvider = actorProvider;
 
   LoanDataRepository _repository;
+  final AuditService? _auditService;
+  final AppUser? Function()? _actorProvider;
   bool _isDemoMode;
   bool get isDemoMode => _isDemoMode;
   LoanDataRepository get repository => _repository;
@@ -1041,6 +1087,28 @@ class LoanPortfolioProvider extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
   String? get error => _error;
+
+  void clearError() {
+    if (_error == null) return;
+    _error = null;
+    notifyListeners();
+  }
+
+  Future<void> deleteLoan(String loanId, {bool skipRefresh = false}) async {
+    final existingLoan = loanById(loanId);
+    await _repository.deleteLoan(loanId);
+    await _auditService?.record(
+      actor: _actorProvider?.call(),
+      action: 'LOAN_DELETED',
+      targetType: 'loan',
+      targetId: loanId,
+      details: 'Cascaded delete for loan $loanId'
+          '${existingLoan != null ? ' (principal=${existingLoan.principalSanctioned}, outstanding=${existingLoan.totalOutstanding})' : ''}',
+    );
+    if (!skipRefresh) {
+      await refresh();
+    }
+  }
 
   Future<void> refresh() async {
     _isLoading = true;
@@ -1313,6 +1381,14 @@ class LoanPortfolioProvider extends ChangeNotifier {
       initialSchedule: settledSchedule,
       disbursementTxn: disbTxn,
     );
+    await _auditService?.record(
+      actor: _actorProvider?.call(),
+      action: 'LOAN_ORIGINATED',
+      targetType: 'loan',
+      targetId: loan.loanId,
+      details: 'Originated ${loan.loanId} for borrower ${loan.borrowerId} '
+          '(sanctioned=${loan.principalSanctioned}, tenure=${loan.tenureInstallments}, emi=${loan.emiAmount})',
+    );
     if (!skipRefresh) await refresh();
     return loan;
   }
@@ -1329,8 +1405,23 @@ class LoanPortfolioProvider extends ChangeNotifier {
     double? geoLng,
     String? notes,
   }) async {
+    if (!amount.isFinite || amount <= 0) {
+      throw ArgumentError('Payment amount must be greater than 0.');
+    }
     final loan = loanById(loanId);
     if (loan == null) throw StateError('Loan $loanId not found.');
+    final normalizedRef = referenceNo.trim().toLowerCase();
+    if (normalizedRef.isNotEmpty) {
+      final alreadyPosted = transactions.any(
+        (t) =>
+            t.loanId == loanId &&
+            t.txnType == txnType &&
+            t.referenceNo.trim().toLowerCase() == normalizedRef,
+      );
+      if (alreadyPosted) {
+        throw StateError('Duplicate reference "$referenceNo" already recorded for loan $loanId.');
+      }
+    }
     final product = productById(loan.productId) ?? products.first;
     final now = DateTime.now();
 
@@ -1489,6 +1580,12 @@ class LoanPortfolioProvider extends ChangeNotifier {
     InterestMethod? newMethod,
     RepaymentFrequency? newFrequency,
   }) async {
+    if (!newPrincipal.isFinite || newPrincipal <= 0) {
+      throw ArgumentError('Restructured principal must be greater than 0.');
+    }
+    if (newTenure <= 0) {
+      throw ArgumentError('Restructured tenure must be greater than 0.');
+    }
     final loan = loanById(loanId);
     if (loan == null) throw StateError('Loan $loanId not found.');
     final existing = scheduleForLoan(loanId);

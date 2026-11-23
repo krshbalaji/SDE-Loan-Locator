@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/borrower_model.dart';
 import '../models/loan_model.dart';
 import '../models/loan_product_model.dart';
+import '../models/transaction_model.dart';
 import '../utils/indian_formatters.dart';
 
 enum AnalyticsDimension {
@@ -50,6 +51,7 @@ class PortfolioVisualAnalyticsPanel extends StatefulWidget {
     this.employeeNameResolver,
     this.productNameResolver,
     this.products = const [],
+    this.transactions = const [],
   });
 
   final List<LoanModel> loans;
@@ -62,6 +64,7 @@ class PortfolioVisualAnalyticsPanel extends StatefulWidget {
   final String Function(String key)? employeeNameResolver;
   final String Function(String key)? productNameResolver;
   final List<LoanProductModel> products;
+  final List<TransactionModel> transactions;
 
   @override
   State<PortfolioVisualAnalyticsPanel> createState() =>
@@ -192,6 +195,12 @@ class _PortfolioVisualAnalyticsPanelState
     final theme = Theme.of(context);
     final overallNpaPct =
         totalPos <= 0 ? 0.0 : (totalNpaPos / totalPos) * 100.0;
+    final visibleLoanIds = widget.loans.map((l) => l.loanId).toSet();
+    final trends = _computeCollectionTrends(
+      transactions: widget.transactions,
+      loanIds: visibleLoanIds,
+      asOf: DateTime.now(),
+    );
 
     return Card(
       elevation: 0,
@@ -246,6 +255,14 @@ class _PortfolioVisualAnalyticsPanelState
               ],
             ),
             const SizedBox(height: 12),
+            _VisualStoryStrip(
+              totalPos: totalPos,
+              totalNpaPos: totalNpaPos,
+              overallNpaPct: overallNpaPct,
+              loanCount: widget.loans.length,
+              topSliceTitle: metrics.isNotEmpty ? metrics.first.title : 'None',
+            ),
+            const SizedBox(height: 10),
             Wrap(
               spacing: 10,
               runSpacing: 6,
@@ -264,6 +281,10 @@ class _PortfolioVisualAnalyticsPanelState
                   label: 'Accounts',
                   value: '${widget.loans.length}',
                 ),
+                _SummaryPill(label: 'MoM', value: trends.momLabel, isAlert: trends.momAlert),
+                _SummaryPill(label: 'QoQ', value: trends.qoqLabel, isAlert: trends.qoqAlert),
+                _SummaryPill(label: 'YoY', value: trends.yoyLabel, isAlert: trends.yoyAlert),
+                _SummaryPill(label: 'YTD', value: trends.ytdLabel),
               ],
             ),
             const SizedBox(height: 12),
@@ -675,3 +696,177 @@ class _SummaryPill extends StatelessWidget {
   }
 }
 
+
+
+class _VisualStoryStrip extends StatelessWidget {
+  const _VisualStoryStrip({
+    required this.totalPos,
+    required this.totalNpaPos,
+    required this.overallNpaPct,
+    required this.loanCount,
+    required this.topSliceTitle,
+  });
+
+  final double totalPos;
+  final double totalNpaPos;
+  final double overallNpaPct;
+  final int loanCount;
+  final String topSliceTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final bool isHighRisk = overallNpaPct >= 5.0;
+    final bool isWatch = !isHighRisk && overallNpaPct > 0;
+
+    final Color badgeColor = isHighRisk
+        ? Colors.red.shade700
+        : (isWatch ? Colors.amber.shade800 : Colors.green.shade700);
+    final IconData statusIcon = isHighRisk
+        ? Icons.warning_amber_rounded
+        : (isWatch ? Icons.visibility_rounded : Icons.verified_rounded);
+    final String statusLabel = isHighRisk
+        ? 'Action Needed'
+        : (isWatch ? 'Watch Zone' : 'Healthy Book');
+
+    final double healthyShare =
+        totalPos <= 0 ? 1.0 : ((totalPos - totalNpaPos) / totalPos).clamp(0.0, 1.0);
+
+    final String storyLine = loanCount == 0
+        ? 'No loans in this slice yet—load or adjust filters to see portfolio health.'
+        : 'Lead concentration is in $topSliceTitle; ${(healthyShare * 100).toStringAsFixed(0)}% of slice POS sits outside 90+ DPD NPA.';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(statusIcon, color: badgeColor, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                statusLabel,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: badgeColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const Spacer(),
+              Text(
+                '${(healthyShare * 100).toStringAsFixed(0)}% Non-NPA',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: healthyShare,
+              minHeight: 8,
+              backgroundColor: Colors.red.shade100,
+              valueColor: AlwaysStoppedAnimation<Color>(badgeColor),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            storyLine,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurface,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+class _CollectionTrendSummary {
+  const _CollectionTrendSummary({
+    required this.momLabel,
+    required this.qoqLabel,
+    required this.yoyLabel,
+    required this.ytdLabel,
+    this.momAlert = false,
+    this.qoqAlert = false,
+    this.yoyAlert = false,
+  });
+
+  final String momLabel;
+  final String qoqLabel;
+  final String yoyLabel;
+  final String ytdLabel;
+  final bool momAlert;
+  final bool qoqAlert;
+  final bool yoyAlert;
+}
+
+_CollectionTrendSummary _computeCollectionTrends({
+  required List<TransactionModel> transactions,
+  required Set<String> loanIds,
+  required DateTime asOf,
+}) {
+  final credits = transactions
+      .where((t) => t.isCreditToLoan && loanIds.contains(t.loanId))
+      .toList();
+
+  double sumBetween(DateTime startInclusive, DateTime endExclusive) {
+    var total = 0.0;
+    for (final t in credits) {
+      if (!t.createdAt.isBefore(startInclusive) && t.createdAt.isBefore(endExclusive)) {
+        total += t.totalAmount;
+      }
+    }
+    return total;
+  }
+
+  String deltaLabel(double current, double previous) {
+    if (previous <= 0) return 'Baseline';
+    final pct = ((current - previous) / previous) * 100.0;
+    final sign = pct >= 0 ? '+' : '';
+    return '$sign${pct.toStringAsFixed(0)}%';
+  }
+
+  final curMonthStart = DateTime(asOf.year, asOf.month, 1);
+  final nextMonthStart = DateTime(asOf.year, asOf.month + 1, 1);
+  final prevMonthStart = DateTime(asOf.year, asOf.month - 1, 1);
+  final curMonth = sumBetween(curMonthStart, nextMonthStart);
+  final prevMonth = sumBetween(prevMonthStart, curMonthStart);
+
+  final qStartMonth = ((asOf.month - 1) ~/ 3) * 3 + 1;
+  final curQStart = DateTime(asOf.year, qStartMonth, 1);
+  final nextQStart = DateTime(asOf.year, qStartMonth + 3, 1);
+  final prevQStart = DateTime(asOf.year, qStartMonth - 3, 1);
+  final curQ = sumBetween(curQStart, nextQStart);
+  final prevQ = sumBetween(prevQStart, curQStart);
+
+  // Indian Financial Year (Apr 1 - Mar 31)
+  final fyStartYear = asOf.month >= 4 ? asOf.year : asOf.year - 1;
+  final curFyStart = DateTime(fyStartYear, 4, 1);
+  final prevFyStart = DateTime(fyStartYear - 1, 4, 1);
+  final nextDay = DateTime(asOf.year, asOf.month, asOf.day + 1);
+  final prevFySamePoint = DateTime(asOf.year - 1, asOf.month, asOf.day + 1);
+
+  final ytd = sumBetween(curFyStart, nextDay);
+  final prevYtd = sumBetween(prevFyStart, prevFySamePoint);
+
+  return _CollectionTrendSummary(
+    momLabel: deltaLabel(curMonth, prevMonth),
+    qoqLabel: deltaLabel(curQ, prevQ),
+    yoyLabel: deltaLabel(ytd, prevYtd),
+    ytdLabel: ytd > 0 ? IndianFormatters.formatInrCompact(ytd) : 'FY Active',
+    momAlert: prevMonth > 0 && curMonth < prevMonth,
+    qoqAlert: prevQ > 0 && curQ < prevQ,
+    yoyAlert: prevYtd > 0 && ytd < prevYtd,
+  );
+}
