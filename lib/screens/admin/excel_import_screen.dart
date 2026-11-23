@@ -25,6 +25,7 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
   String _selectedAgentId = 'uid_agent_karthik';
   bool _overwriteExisting = false;
   bool _committing = false;
+  ExcelImportMode _importMode = ExcelImportMode.append;
 
   Future<void> _pickExcel(LoanPortfolioProvider portfolio) async {
     final result = await ExcelImportService.pickAndParseExcel(
@@ -113,7 +114,7 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
         defaultProduct: product,
         assignedAgentId: _selectedAgentId,
         importedByUid: auth.currentUser?.uid ?? 'uid_admin_meena',
-        overwriteExisting: _overwriteExisting,
+        mode: _importMode,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -240,6 +241,39 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
                         label: const Text('Clear Demo Data'),
                       ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                SegmentedButton<ExcelImportMode>(
+                  segments: const [
+                    ButtonSegment<ExcelImportMode>(
+                      value: ExcelImportMode.append,
+                      icon: Icon(Icons.add_circle_outline),
+                      label: Text('Append'),
+                    ),
+                    ButtonSegment<ExcelImportMode>(
+                      value: ExcelImportMode.selectiveUpdate,
+                      icon: Icon(Icons.edit_note),
+                      label: Text('Selective Update'),
+                    ),
+                    ButtonSegment<ExcelImportMode>(
+                      value: ExcelImportMode.overwrite,
+                      icon: Icon(Icons.sync),
+                      label: Text('Overwrite'),
+                    ),
+                  ],
+                  selected: {_importMode},
+                  onSelectionChanged: (selection) {
+                    setState(() => _importMode = selection.first);
+                  },
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _importMode == ExcelImportMode.selectiveUpdate
+                      ? 'Selective Update: Updates only existing loans matching LoanNo or ApplicationNo in the uploaded file; untouched loans stay as-is.'
+                      : (_importMode == ExcelImportMode.overwrite
+                          ? 'Overwrite: Imports full sheet records while preserving verified GPS pins when rows lack coordinates.'
+                          : 'Append: Adds rows from the uploaded file onto the existing portfolio.'),
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
                 ),
               ],
             ),

@@ -6,6 +6,7 @@ import '../../engines/delinquency_engine.dart';
 import '../../models/loan_model.dart';
 import '../../models/loan_product_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/app_update_service.dart';
 import '../../services/firestore_loan_service.dart';
 import '../../services/local_vault_service.dart';
 import '../../services/location_service.dart';
@@ -32,6 +33,7 @@ class MasterDashboard extends StatefulWidget {
 }
 
 class _MasterDashboardState extends State<MasterDashboard> {
+  final AppUpdateService _updateService = AppUpdateService();
   int _selectedIndex = 0;
   double _conveyanceRatePerKm = ConveyanceEngine.defaultRatePerKmInr;
   String? _selectedSliceBranch;
@@ -274,6 +276,17 @@ class _MasterDashboardState extends State<MasterDashboard> {
     );
   }
 
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _updateService.checkOnStartup();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
@@ -351,6 +364,20 @@ class _MasterDashboardState extends State<MasterDashboard> {
             },
           ),
           IconButton(
+            tooltip: 'Single-Tap APK Update',
+            icon: const Icon(Icons.system_update_alt),
+            onPressed: () async {
+              final outcome = await _updateService.triggerGatedApkUpdate(
+                allowApkDownload: auth.allowApkDownload,
+                requireApkApproval: auth.requireApkApproval,
+              );
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(outcome.message)),
+              );
+            },
+          ),
+          IconButton(
             tooltip: 'Sign Out',
             icon: const Icon(Icons.logout),
             onPressed: () => auth.signOut(),
@@ -419,6 +446,11 @@ class _MasterDashboardState extends State<MasterDashboard> {
     return ListView(
       padding: const EdgeInsets.all(14),
       children: [
+        _DashboardStoryStrip(
+          kpi: kpi,
+          transactions: portfolio.transactions,
+        ),
+        const SizedBox(height: 12),
         Wrap(
           spacing: 10,
           runSpacing: 10,

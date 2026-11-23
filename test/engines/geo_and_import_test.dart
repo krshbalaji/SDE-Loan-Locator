@@ -115,6 +115,57 @@ void main() {
       expect(result.rows.first.mobilePrimary, '+919842199999');
       expect(result.rows.first.latitude, closeTo(9.9252, 0.0001));
     });
+
+    test('keeps distinct borrowers on shared mobile and parses N/E coordinates', () {
+      final excel = Excel.createExcel();
+      final sheet = excel[excel.getDefaultSheet()!];
+      sheet.appendRow([
+        TextCellValue('S.No'),
+        TextCellValue('Location'),
+        TextCellValue('ApplicationNo'),
+        TextCellValue('LoanNo'),
+        TextCellValue('CustomerName'),
+        TextCellValue('Amount'),
+        TextCellValue('LatLong'),
+        TextCellValue('MobileNo'),
+      ]);
+      sheet.appendRow([
+        IntCellValue(1),
+        TextCellValue('Madurai City'),
+        TextCellValue('APP-7001'),
+        TextCellValue('LN-7001'),
+        TextCellValue('RAVI RAMAIAH'),
+        IntCellValue(250000),
+        TextCellValue('9.901209N,78.136745E'),
+        TextCellValue('9865821700'),
+      ]);
+      sheet.appendRow([
+        IntCellValue(2),
+        TextCellValue('Madurai City'),
+        TextCellValue('APP-7002'),
+        TextCellValue('LN-7002'),
+        TextCellValue('ESWARI R'),
+        IntCellValue(180000),
+        TextCellValue(''),
+        TextCellValue('9865821700'),
+      ]);
+
+      final encoded = excel.encode()!;
+      final res = ExcelImportService.parseExcelBytes(
+        bytes: Uint8List.fromList(encoded),
+        fileName: 'shared_mobile_test.xlsx',
+        existingBorrowers: const [],
+        existingLoans: const [],
+      );
+
+      expect(res.errors, isEmpty);
+      expect(res.validCount, 2);
+      expect(res.rows[0].customerName, 'RAVI RAMAIAH');
+      expect(res.rows[0].latitude, closeTo(9.901209, 0.00001));
+      expect(res.rows[0].longitude, closeTo(78.136745, 0.00001));
+      expect(res.rows[1].customerName, 'ESWARI R');
+      expect(res.rows[1].mobilePrimary, '+919865821700');
+    });
   });
 }
 

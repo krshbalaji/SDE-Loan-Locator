@@ -108,6 +108,12 @@ class ExcelParseResult {
 /// Combines header-alias matching with cell-content pattern inference (detecting
 /// `lat, lng` coordinates, 10-digit Indian mobiles, PAN IDs, amounts, and names
 /// regardless of header naming or column order).
+enum ExcelImportMode {
+  append,
+  selectiveUpdate,
+  overwrite,
+}
+
 class ExcelImportService {
   ExcelImportService._();
 
@@ -296,10 +302,17 @@ class ExcelImportService {
       return fallback;
     }
 
-    final isNbfcMaster = headerCells.contains('loanid') ||
+    final hasCoreIdentity = headerCells.contains('loanid') ||
+        headerCells.contains('loanaccountno') ||
         headerCells.contains('applicantname') ||
-        headerCells.contains('sanctionamount') ||
-        headerCells.contains('totaldisbursedamount');
+        headerCells.contains('customername') ||
+        headerCells.contains('borrowername');
+    final hasCoreAmount = headerCells.contains('sanctionamount') ||
+        headerCells.contains('totaldisbursedamount') ||
+        headerCells.contains('principaloutstanding') ||
+        headerCells.contains('pos') ||
+        headerCells.contains('loanamount');
+    final isNbfcMaster = hasCoreIdentity || hasCoreAmount;
 
     final hasSerialCol = !isNbfcMaster &&
         headerCells.isNotEmpty &&
@@ -603,27 +616,42 @@ class ExcelImportService {
     required LoanProductModel defaultProduct,
     required String assignedAgentId,
     required String importedByUid,
-    bool overwriteExisting = false,
+    ExcelImportMode mode = ExcelImportMode.append,
   }) async {
-    if (overwriteExisting && portfolio.repository is InMemoryDemoLoanService) {
+    if (mode == ExcelImportMode.overwrite && portfolio.repository is InMemoryDemoLoanService) {
       (portfolio.repository as InMemoryDemoLoanService).clearAllData();
     }
     var imported = 0;
     final now = DateTime.now();
 
+    String normName(String s) =>
+        s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
     for (final row in parseResult.rows.where((r) => r.isValid)) {
+      final incomingName = row.customerName.trim();
+      final incomingNormName = normName(incomingName);
+
       BorrowerModel? borrower;
+      BorrowerModel? geoDonor;
       for (final existing in portfolio.borrowers) {
         if (IndianFormatters.normalizeIndianMobile(existing.mobilePrimary) ==
             row.mobilePrimary) {
-          borrower = existing;
-          break;
+          if (existing.geoVerified && (existing.latitude != 0.0 || existing.longitude != 0.0)) {
+            geoDonor ??= existing;
+          }
+          if (incomingNormName.isNotEmpty &&
+              normName(existing.fullName) == incomingNormName) {
+            borrower = existing;
+            break;
+          }
         }
       }
 
       if (borrower == null) {
-        final lat = row.latitude ?? 9.9252;
-        final lng = row.longitude ?? 78.1198;
+        final hasRowGeo = row.latitude != 0.0 || row.longitude != 0.0;
+        final lat = hasRowGeo ? row.latitude! : (geoDonor?.latitude ?? 9.9252);
+        final lng = hasRowGeo ? row.longitude! : (geoDonor?.longitude ?? 78.1198);
+        final hasGeo = hasRowGeo || (geoDonor != null);
         borrower = BorrowerModel(
           borrowerId: portfolio.generateNextBorrowerId(),
           fullName: row.customerName.trim(),
@@ -640,7 +668,7 @@ class ExcelImportService {
           latitude: lat,
           longitude: lng,
           geohash: GeoFilterEngine.encodeGeohash(lat, lng),
-          geoVerified: row.latitude != null && row.longitude != null,
+          geoVerified: hasGeo,
           assignedAgentId: assignedAgentId,
           createdAt: now,
           updatedAt: now,
@@ -669,6 +697,46 @@ class ExcelImportService {
       final disbursedOn = mob > 0
           ? DateTime(now.year, now.month - mob, now.day.clamp(1, 28))
           : now;
+
+      final normLoanNo = row.loanNo.trim().toLowerCase();
+      final normAppNo = row.applicationNo.trim().toLowerCase();
+      LoanModel? matchedLoan;
+      for (final existingLoan in portfolio.loans) {
+        if ((normLoanNo.isNotEmpty && existingLoan.loanId.trim().toLowerCase() == normLoanNo) ||
+            (normAppNo.isNotEmpty && existingLoan.applicationNo.trim().toLowerCase() == normAppNo)) {
+          matchedLoan = existingLoan;
+          break;
+        }
+      }
+
+      if (mode == ExcelImportMode.selectiveUpdate) {
+        if (matchedLoan == null) {
+          continue;
+        }
+        final updatedPos = row.principalOutstandingOverride ??
+            (row.amount > 0 ? row.amount : matchedLoan.principalOutstanding);
+        final updatedDpd = row.dpd ?? matchedLoan.dpd;
+        final updatedStatus = updatedDpd >= 90
+            ? LoanStatus.delinquent
+            : (updatedPos <= 0 ? LoanStatus.closed : LoanStatus.active);
+        final idx = portfolio.loans.indexWhere((l) => l.loanId == matchedLoan!.loanId);
+        if (idx != -1) {
+          final nextLoans = List<LoanModel>.from(portfolio.loans);
+          nextLoans[idx] = matchedLoan.copyWith(
+            borrowerId: borrower.borrowerId,
+            assignedAgentId: assignedAgentId,
+            principalSanctioned: row.amount > 0 ? row.amount : matchedLoan.principalSanctioned,
+            interestRateAnnual: effectiveProduct.annualInterestRate,
+            tenureInstallments: row.tenureInstallments > 0 ? row.tenureInstallments : matchedLoan.tenureInstallments,
+            principalOutstanding: updatedPos,
+            dpd: updatedDpd,
+            status: updatedStatus,
+          );
+          portfolio.loans = nextLoans;
+        }
+        imported++;
+        continue;
+      }
 
       await portfolio.originateNewLoan(
         borrower: borrower,

@@ -32,6 +32,25 @@ class AuthService extends ChangeNotifier {
   List<AppUser> get staffDirectory => List.unmodifiable(_staffDirectory);
   bool get isAuthenticated => _currentUser != null;
   bool get isLoading => _isLoading;
+  bool _allowApkDownload = true;
+  bool _requireApkApproval = false;
+  List<String> _allowedBranches = const [];
+
+  bool get allowApkDownload => _allowApkDownload;
+  bool get requireApkApproval => _requireApkApproval;
+  List<String> get allowedBranches => _allowedBranches;
+
+  void setManualSessionParameters({
+    bool? allowApkDownload,
+    bool? requireApkApproval,
+    List<String>? allowedBranches,
+  }) {
+    if (allowApkDownload != null) _allowApkDownload = allowApkDownload;
+    if (requireApkApproval != null) _requireApkApproval = requireApkApproval;
+    if (allowedBranches != null) _allowedBranches = List<String>.from(allowedBranches);
+    notifyListeners();
+  }
+
   String? get errorMessage => _errorMessage;
 
   static const List<AppUser> demoUsers = [
