@@ -23,7 +23,6 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
   ExcelParseResult? _parseResult;
   LoanProductModel? _selectedProduct;
   String _selectedAgentId = 'uid_agent_karthik';
-  bool _overwriteExisting = false;
   bool _committing = false;
   ExcelImportMode _importMode = ExcelImportMode.append;
 
@@ -83,7 +82,7 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
         (portfolio.products.isNotEmpty ? portfolio.products.first : null);
     if (parse == null || product == null) return;
 
-    if (_overwriteExisting) {
+    if (_importMode == ExcelImportMode.overwrite) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -122,7 +121,7 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Imported $count of ${parse.rows.length} row(s) in ${_overwriteExisting ? "Overwrite" : "Append"} mode$skipNote.',
+            'Imported $count of ${parse.rows.length} row(s) in ${_importMode == ExcelImportMode.overwrite ? "Overwrite" : (_importMode == ExcelImportMode.selectiveUpdate ? "Selective Update" : "Append")} mode$skipNote.',
           ),
         ),
       );
@@ -219,26 +218,6 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
                         },
                       ),
                     ),
-                    SegmentedButton<bool>(
-                      segments: const [
-                        ButtonSegment<bool>(
-                          value: false,
-                          icon: Icon(Icons.playlist_add),
-                          label: Text('Append'),
-                        ),
-                        ButtonSegment<bool>(
-                          value: true,
-                          icon: Icon(Icons.find_replace),
-                          label: Text('Overwrite'),
-                        ),
-                      ],
-                      selected: <bool>{_overwriteExisting},
-                      onSelectionChanged: (selection) {
-                        if (selection.isNotEmpty) {
-                          setState(() => _overwriteExisting = selection.first);
-                        }
-                      },
-                    ),
                     FilledButton.icon(
                       onPressed: () => _pickExcel(portfolio),
                       icon: const Icon(Icons.upload_file),
@@ -258,17 +237,17 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
                     ButtonSegment<ExcelImportMode>(
                       value: ExcelImportMode.append,
                       icon: Icon(Icons.add_circle_outline),
-                      label: Text('Append'),
+                      label: Text('Append', maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis),
                     ),
                     ButtonSegment<ExcelImportMode>(
                       value: ExcelImportMode.selectiveUpdate,
                       icon: Icon(Icons.edit_note),
-                      label: Text('Selective Update'),
+                      label: Text('Selective', maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis),
                     ),
                     ButtonSegment<ExcelImportMode>(
                       value: ExcelImportMode.overwrite,
                       icon: Icon(Icons.sync),
-                      label: Text('Overwrite'),
+                      label: Text('Overwrite', maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis),
                     ),
                   ],
                   selected: {_importMode},
@@ -330,7 +309,7 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
       agingBucket: AgingBucket.fromDpd(r.dpd ?? 0),
     );
   }).toList()).invalidCount} dry-run issues) • '
-                          'Mode: ${_overwriteExisting ? "Overwrite" : "Append"}',
+                          'Mode: ${_importMode == ExcelImportMode.overwrite ? "Overwrite" : (_importMode == ExcelImportMode.selectiveUpdate ? "Selective Update" : "Append")}',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),

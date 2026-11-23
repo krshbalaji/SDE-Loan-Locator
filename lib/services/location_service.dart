@@ -83,6 +83,8 @@ class LocationService {
     final hay =
         '${addressOrCity ?? ""} ${branch ?? ""} ${pincode ?? ""}'.toUpperCase();
 
+    final hasExplicitHodal = hay.contains('HODAL') || hay.contains('121106');
+    final hasExplicitMadurai = hay.contains('MADURAI') || hay.contains('625');
     List<double>? placeMatch;
     for (final entry in _cityCenters.entries) {
       if (hay.contains(entry.key)) {
@@ -103,6 +105,9 @@ class LocationService {
         (rawLat! - 9.9252).abs() < 0.015 &&
         (rawLng! - 78.1198).abs() < 0.015;
 
+    if (hasExplicitHodal && !hasExplicitMadurai) {
+      return (lat: _cityCenters['HODAL']![0], lng: _cityCenters['HODAL']![1], resolvedFromPlace: true);
+    }
     if (validIndia && (!isGenericMaduraiFallback || placeMatch == null)) {
       return (lat: rawLat!, lng: rawLng!, resolvedFromPlace: false);
     }

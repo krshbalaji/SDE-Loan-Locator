@@ -370,7 +370,16 @@ class _LoanListScreenState extends State<LoanListScreen> {
           Expanded(
             child: filtered.isEmpty
                 ? const Center(child: Text('No matching loans found.'))
-                : ListView.builder(
+                : Builder(
+                    builder: (context) {
+                      final byBorrower = <String, int>{};
+                      final byName = <String, int>{};
+                      for (final item in filtered) {
+                        byBorrower[item.borrowerId] = (byBorrower[item.borrowerId] ?? 0) + 1;
+                        final nm = (portfolio.borrowerById(item.borrowerId)?.fullName ?? item.borrowerId).trim().toLowerCase();
+                        byName[nm] = (byName[nm] ?? 0) + 1;
+                      }
+                      return ListView.builder(
                     padding: const EdgeInsets.all(12),
                     itemCount: filtered.length,
                     itemBuilder: (context, idx) {
@@ -403,9 +412,32 @@ class _LoanListScreenState extends State<LoanListScreen> {
                               ),
                             ),
                           ),
-                          title: Text(
-                            borrower?.fullName ?? loan.borrowerId,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  borrower?.fullName ?? loan.borrowerId,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              if ((byBorrower[loan.borrowerId] ?? 1) > 1 || (byName[(borrower?.fullName ?? loan.borrowerId).trim().toLowerCase()] ?? 1) > 1) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.indigo.shade50,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '${byBorrower[loan.borrowerId] ?? byName[(borrower?.fullName ?? loan.borrowerId).trim().toLowerCase()]} Loans',
+                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.indigo.shade800),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                           subtitle: Text(
                             '${loan.loanId} • EMI ${IndianFormatters.formatInr(loan.emiAmount, showDecimals: false)} • ${loan.status.label}',
@@ -447,6 +479,8 @@ class _LoanListScreenState extends State<LoanListScreen> {
                           ),
                         ),
                       );
+                    },
+                  );
                     },
                   ),
           ),

@@ -436,9 +436,52 @@ class _MasterDashboardState extends State<MasterDashboard> {
       toDate: now,
       ratePerKmInr: _conveyanceRatePerKm,
     );
+    final borrowerLookup = {
+      for (final b in portfolio.borrowers) b.borrowerId: b,
+    };
+    final visibleBaseLoans =
+        auth.visibleLoansFor(portfolio.loans, portfolio.borrowers);
+    final hasSliceFilter = (_selectedSliceBranch != null && _selectedSliceBranch!.isNotEmpty) ||
+        (_selectedSliceAgentId != null && _selectedSliceAgentId!.isNotEmpty) ||
+        (_selectedSliceProductId != null && _selectedSliceProductId!.isNotEmpty) ||
+        (_visualDimension != null && _visualSliceKey != null);
+    final slicedLoans = visibleBaseLoans.where((loan) {
+      final b = borrowerLookup[loan.borrowerId];
+      if (_selectedSliceBranch != null && _selectedSliceBranch!.isNotEmpty) {
+        final br = (b?.branch ?? '').trim().isEmpty
+            ? 'Unassigned Branch'
+            : (b?.branch ?? '').trim();
+        if (br != _selectedSliceBranch) return false;
+      }
+      if (_selectedSliceAgentId != null && _selectedSliceAgentId!.isNotEmpty) {
+        if (loan.assignedAgentId != _selectedSliceAgentId) return false;
+      }
+      if (_selectedSliceProductId != null &&
+          _selectedSliceProductId!.isNotEmpty) {
+        if (loan.productId != _selectedSliceProductId) return false;
+      }
+      if (_visualDimension != null && _visualSliceKey != null) {
+        final key = switch (_visualDimension!) {
+          AnalyticsDimension.branch => ((b?.branch ?? '').trim().isEmpty
+              ? 'Unassigned Branch'
+              : (b?.branch ?? '').trim()),
+          AnalyticsDimension.employee => (loan.assignedAgentId.trim().isEmpty
+              ? 'Unassigned Officer'
+              : loan.assignedAgentId.trim()),
+          AnalyticsDimension.product => loan.productId.trim(),
+          _ => '${loan.tenureInstallments}m',
+        };
+        if (key != _visualSliceKey) return false;
+      }
+      return true;
+    }).toList();
+    final slicedLoanIds = {for (final l in slicedLoans) l.loanId};
+    final slicedTxns = portfolio.transactions
+        .where((t) => slicedLoanIds.contains(t.loanId))
+        .toList();
     final kpi = DelinquencyEngine.computePortfolioKpis(
-      loans: auth.visibleLoansFor(portfolio.loans, portfolio.borrowers),
-      transactions: portfolio.transactions,
+      loans: slicedLoans,
+      transactions: hasSliceFilter ? slicedTxns : portfolio.transactions,
       agentNames: auth.knownAgentNames,
       asOfDate: DateTime.now(),
     );
@@ -448,7 +491,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
       children: [
         _DashboardStoryStrip(
           kpi: kpi,
-          transactions: portfolio.transactions,
+          transactions: hasSliceFilter ? slicedTxns : portfolio.transactions,
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -776,8 +819,8 @@ class _MasterDashboardState extends State<MasterDashboard> {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     subtitle: Text(
-                      '${p.annualInterestRate}% p.a. (${p.interestMethod.label}) • '
-                      '${p.repaymentFrequency.label} (max ${p.maxTenureInstallments}) • '
+                      'Rate ${p.effectiveMinAnnualInterestRate.toStringAsFixed(1)}–${p.effectiveMaxAnnualInterestRate.toStringAsFixed(1)}% p.a. (base ${p.annualInterestRate}%) • '
+                      'Tenure ${p.minTenureInstallments}–${p.maxTenureInstallments} (${p.repaymentFrequency.label}) • '
                       'Fee ${p.processingFeePct}% + ${p.gstRatePct}% GST • '
                       'Grace ${p.gracePeriodDays}d • Late ${p.lateFeeType == LateFeeType.flatInr ? "₹${p.lateFeeValue.toStringAsFixed(0)}" : "${p.lateFeeValue}%"} • '
                       'Risk ${p.atRiskDpdThreshold}d',

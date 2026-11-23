@@ -60,6 +60,9 @@ class LoanProductModel {
     required this.annualInterestRate,
     required this.repaymentFrequency,
     required this.maxTenureInstallments,
+    this.minTenureInstallments = 1,
+    this.minAnnualInterestRate,
+    this.maxAnnualInterestRate,
     this.processingFeePct = 2.0,
     this.gstRatePct = 18.0,
     this.gracePeriodDays = 3,
@@ -75,6 +78,9 @@ class LoanProductModel {
   final double annualInterestRate;
   final RepaymentFrequency repaymentFrequency;
   final int maxTenureInstallments;
+  final int minTenureInstallments;
+  final double? minAnnualInterestRate;
+  final double? maxAnnualInterestRate;
   final double processingFeePct;
   final double gstRatePct;
   final int gracePeriodDays;
@@ -83,6 +89,20 @@ class LoanProductModel {
   final int atRiskDpdThreshold;
   final bool isActive;
 
+  double get effectiveMinAnnualInterestRate {
+    final v = minAnnualInterestRate ?? (annualInterestRate - 2.0);
+    if (v < 1.0) return 1.0;
+    if (v > 60.0) return 60.0;
+    return v;
+  }
+
+  double get effectiveMaxAnnualInterestRate {
+    final v = maxAnnualInterestRate ?? (annualInterestRate + 3.0);
+    if (v < 1.0) return 1.0;
+    if (v > 65.0) return 65.0;
+    return v;
+  }
+
   LoanProductModel copyWith({
     String? productId,
     String? productName,
@@ -90,6 +110,9 @@ class LoanProductModel {
     double? annualInterestRate,
     RepaymentFrequency? repaymentFrequency,
     int? maxTenureInstallments,
+    int? minTenureInstallments,
+    double? minAnnualInterestRate,
+    double? maxAnnualInterestRate,
     double? processingFeePct,
     double? gstRatePct,
     int? gracePeriodDays,
@@ -106,6 +129,12 @@ class LoanProductModel {
       repaymentFrequency: repaymentFrequency ?? this.repaymentFrequency,
       maxTenureInstallments:
           maxTenureInstallments ?? this.maxTenureInstallments,
+      minTenureInstallments:
+          minTenureInstallments ?? this.minTenureInstallments,
+      minAnnualInterestRate:
+          minAnnualInterestRate ?? this.minAnnualInterestRate,
+      maxAnnualInterestRate:
+          maxAnnualInterestRate ?? this.maxAnnualInterestRate,
       processingFeePct: processingFeePct ?? this.processingFeePct,
       gstRatePct: gstRatePct ?? this.gstRatePct,
       gracePeriodDays: gracePeriodDays ?? this.gracePeriodDays,
@@ -116,40 +145,62 @@ class LoanProductModel {
     );
   }
 
-  factory LoanProductModel.fromMap(Map<String, dynamic> map, {String? id}) {
-    return LoanProductModel(
-      productId: id ?? (map['product_id'] as String? ?? ''),
-      productName: map['product_name'] as String? ?? '',
-      interestMethod: InterestMethod.fromString(map['interest_method'] as String?),
-      annualInterestRate: (map['annual_interest_rate'] as num?)?.toDouble() ?? 18.0,
-      repaymentFrequency:
-          RepaymentFrequency.fromString(map['repayment_frequency'] as String?),
-      maxTenureInstallments: (map['max_tenure_installments'] as num?)?.toInt() ?? 24,
-      processingFeePct: (map['processing_fee_pct'] as num?)?.toDouble() ?? 2.0,
-      gstRatePct: (map['gst_rate_pct'] as num?)?.toDouble() ?? 18.0,
-      gracePeriodDays: (map['grace_period_days'] as num?)?.toInt() ?? 3,
-      lateFeeType: LateFeeType.fromString(map['late_fee_type'] as String?),
-      lateFeeValue: (map['late_fee_value'] as num?)?.toDouble() ?? 2.0,
-      atRiskDpdThreshold: (map['at_risk_dpd_threshold'] as num?)?.toInt() ?? 30,
-      isActive: map['is_active'] as bool? ?? true,
-    );
+  Map<String, dynamic> toMap() {
+    return {
+      'productId': productId,
+      'productName': productName,
+      'interestMethod': interestMethod.name,
+      'annualInterestRate': annualInterestRate,
+      'repaymentFrequency': repaymentFrequency.name,
+      'maxTenureInstallments': maxTenureInstallments,
+      'minTenureInstallments': minTenureInstallments,
+      'minAnnualInterestRate': minAnnualInterestRate,
+      'maxAnnualInterestRate': maxAnnualInterestRate,
+      'processingFeePct': processingFeePct,
+      'gstRatePct': gstRatePct,
+      'gracePeriodDays': gracePeriodDays,
+      'lateFeeType': lateFeeType.name,
+      'lateFeeValue': lateFeeValue,
+      'atRiskDpdThreshold': atRiskDpdThreshold,
+      'isActive': isActive,
+    };
   }
 
-  Map<String, dynamic> toMap() => {
-        'product_id': productId,
-        'product_name': productName,
-        'interest_method': interestMethod.wireValue,
-        'annual_interest_rate': annualInterestRate,
-        'repayment_frequency': repaymentFrequency.wireValue,
-        'max_tenure_installments': maxTenureInstallments,
-        'processing_fee_pct': processingFeePct,
-        'gst_rate_pct': gstRatePct,
-        'grace_period_days': gracePeriodDays,
-        'late_fee_type': lateFeeType.wireValue,
-        'late_fee_value': lateFeeValue,
-        'at_risk_dpd_threshold': atRiskDpdThreshold,
-        'is_active': isActive,
-      };
+  factory LoanProductModel.fromMap(Map<String, dynamic> map, {String? id}) {
+    final methodName = map['interestMethod']?.toString() ?? 'reducingBalance';
+    final method = InterestMethod.values.firstWhere(
+      (e) => e.name == methodName,
+      orElse: () => InterestMethod.reducingBalance,
+    );
+    final freqName = map['repaymentFrequency']?.toString() ?? 'monthly';
+    final freq = RepaymentFrequency.values.firstWhere(
+      (e) => e.name == freqName,
+      orElse: () => RepaymentFrequency.monthly,
+    );
+    final lateName = map['lateFeeType']?.toString() ?? 'percentOverdue';
+    final lateType = LateFeeType.values.firstWhere(
+      (e) => e.name == lateName,
+      orElse: () => LateFeeType.percentOverdue,
+    );
+    return LoanProductModel(
+      productId: (id ?? map['productId'] ?? '').toString(),
+      productName: (map['productName'] ?? 'Loan Product').toString(),
+      interestMethod: method,
+      annualInterestRate: (map['annualInterestRate'] as num?)?.toDouble() ?? 18.0,
+      repaymentFrequency: freq,
+      maxTenureInstallments: (map['maxTenureInstallments'] as num?)?.toInt() ?? 24,
+      minTenureInstallments: (map['minTenureInstallments'] as num?)?.toInt() ?? 1,
+      minAnnualInterestRate: (map['minAnnualInterestRate'] as num?)?.toDouble(),
+      maxAnnualInterestRate: (map['maxAnnualInterestRate'] as num?)?.toDouble(),
+      processingFeePct: (map['processingFeePct'] as num?)?.toDouble() ?? 2.0,
+      gstRatePct: (map['gstRatePct'] as num?)?.toDouble() ?? 18.0,
+      gracePeriodDays: (map['gracePeriodDays'] as num?)?.toInt() ?? 3,
+      lateFeeType: lateType,
+      lateFeeValue: (map['lateFeeValue'] as num?)?.toDouble() ?? 2.0,
+      atRiskDpdThreshold: (map['atRiskDpdThreshold'] as num?)?.toInt() ?? 30,
+      isActive: (map['isActive'] as bool?) ?? true,
+    );
+  }
 }
 
 /// Ready-to-use default NBFC product templates for Housing Finance, LAP,
@@ -220,4 +271,3 @@ class DefaultLoanProducts {
 
   static LoanProductModel get primaryDefault => catalog[1];
 }
-
