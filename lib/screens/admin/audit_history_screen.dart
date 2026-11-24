@@ -151,16 +151,18 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
                       itemBuilder: (ctx, i) {
                         final e = logs[i];
                         final diffLines = e.changes.entries
-                            .map((kv) => '${kv.key}: ${kv.value.before ?? "(empty)"} -$> ${kv.value.after ?? "(empty)"}')
+                            .map((kv) => '${kv.key}: ${kv.value.before ?? "(empty)"} -> ${kv.value.after ?? "(empty)"}')
                             .join(' | ');
+                        final details = diffLines.isNotEmpty
+                            ? '${e.timestamp.toIso8601String()} • By ${e.actorId}\n$diffLines'
+                            : '${e.timestamp.toIso8601String()} • By ${e.actorId}';
                         return Card(
                           margin: const EdgeInsets.symmetric(vertical: 3),
                           child: ListTile(
                             title: Text('${e.recordId} • ${e.summary}'),
-                            subtitle: Text(
-                              '${e.timestamp.toIso8601String()} • By ${e.actorId}'
-                              '${diffLines.isNotEmpty ? "\n$diffLines" : ""}',
-                            ),
+                            subtitle: Text(details),
+                          ),
+                        );
                           ),
                         );
                       },
