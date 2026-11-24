@@ -13,6 +13,10 @@ import '../../models/installment_model.dart';
 import '../../models/loan_model.dart';
 import '../../models/transaction_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/audit_ai_advisor.dart';
+import '../../services/audit_guardian_bridge.dart';
+import '../../services/audit_guardian_service.dart';
+import '../../services/audit_workflow_helper.dart';
 import '../../services/firestore_loan_service.dart';
 import '../../services/location_service.dart';
 import '../../services/pdf_export_service.dart';
@@ -35,6 +39,14 @@ class LoanDetailScreen extends StatefulWidget {
 
 class _LoanDetailScreenState extends State<LoanDetailScreen> {
   int? _selectedScheduleVersion;
+  final AuditGuardianService _auditGuardian = AuditGuardianService();
+  late final AuditGuardianBridge _auditBridge = AuditGuardianBridge(_auditGuardian);
+  final AuditAiAdvisor _auditAdvisor = AuditAiAdvisor();
+  late final AuditWorkflowHelper _auditWorkflow = AuditWorkflowHelper(
+    bridge: _auditBridge,
+    advisor: _auditAdvisor,
+  );
+  final Map<String, Map<String, dynamic>> _liveAuditStore = {};
 
   Future<void> _exportLoanCsv({
     required BorrowerModel? borrower,
@@ -256,6 +268,22 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
       ),
     );
     if (ok != true || !mounted) return;
+    final loan = portfolio.loanById(widget.loanId);
+    if (loan != null && mounted) {
+      final estPrincipalAfter =
+          (loan.principalOutstanding - txn.totalAmount).clamp(0.0, double.infinity);
+      final snap = await _auditWorkflow.reviewDirectLoanEdit(
+        context: context,
+        beforeLoan: loan,
+        updatedFields: {
+          'principal_outstanding': estPrincipalAfter,
+          'status': 'reversal_review',
+        },
+        liveStoreById: _liveAuditStore,
+        actorId: uid,
+      );
+      if (snap == null || !mounted) return;
+    }
     await portfolio.reverseTransaction(
       originalTxn: txn,
       authorizedByUid: uid,

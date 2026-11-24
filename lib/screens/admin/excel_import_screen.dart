@@ -5,6 +5,10 @@ import '../../models/loan_model.dart';
 import '../../models/loan_product_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/excel_import_service.dart';
+import '../../services/audit_ai_advisor.dart';
+import '../../services/audit_guardian_bridge.dart';
+import '../../services/audit_guardian_service.dart';
+import '../../services/audit_workflow_helper.dart';
 import '../../services/firestore_loan_service.dart';
 import '../../utils/indian_formatters.dart';
 import '../../utils/import_dry_run_validator.dart';
@@ -25,6 +29,14 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
   String _selectedAgentId = 'uid_agent_karthik';
   bool _committing = false;
   ExcelImportMode _importMode = ExcelImportMode.append;
+  final AuditGuardianService _auditGuardian = AuditGuardianService();
+  late final AuditGuardianBridge _auditBridge = AuditGuardianBridge(_auditGuardian);
+  final AuditAiAdvisor _auditAdvisor = AuditAiAdvisor();
+  late final AuditWorkflowHelper _auditWorkflow = AuditWorkflowHelper(
+    bridge: _auditBridge,
+    advisor: _auditAdvisor,
+  );
+  final Map<String, Map<String, dynamic>> _liveAuditStore = {};
 
   Future<void> _pickExcel(LoanPortfolioProvider portfolio) async {
     final result = await ExcelImportService.pickAndParseExcel(
@@ -104,6 +116,34 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
       );
       if (confirmed != true || !mounted) return;
     }
+
+    final actorId = auth.currentUser?.uid ?? 'uid_admin_meena';
+    final fileLabel = parse.fileName;
+    final reviewSnapshot = await _auditWorkflow.reviewExcelImport(
+      context: context,
+      parseResult: parse,
+      existingLoans: portfolio.loans,
+      liveStoreById: _liveAuditStore,
+      actorId: actorId,
+      fileLabel: fileLabel,
+      onRollbackLatest: () {
+        final reverted = _auditBridge.rollbackLatestBatch(
+          liveStoreById: _liveAuditStore,
+          actorId: actorId,
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              reverted > 0
+                  ? 'Rolled back $reverted record(s) from latest staged batch.'
+                  : 'No eligible batch snapshot available to roll back.',
+            ),
+          ),
+        );
+      },
+    );
+    if (reviewSnapshot == null || !mounted) return;
 
     setState(() => _committing = true);
     try {
