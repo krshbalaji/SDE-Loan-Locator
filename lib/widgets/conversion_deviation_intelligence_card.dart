@@ -39,7 +39,7 @@ class ConversionDeviationIntelligenceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final report = (service ?? const PortfolioIntelligenceService()).analyze(records);
+    final report = (service ?? PortfolioIntelligenceService()).analyze(records);
     final funnel = report.funnel;
     final visiblePeople = report.personScorecards.take(maxPeopleShown).toList();
     final visibleDeviations = report.deviations.take(maxDeviationsShown).toList();
