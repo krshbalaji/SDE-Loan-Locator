@@ -636,9 +636,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
                   'loanId': loan.loanId,
                   'applicationNo': loan.applicationNo,
                   'borrowerId': loan.borrowerId,
-                  'borrowerName': borrowersById[loan.borrowerId]?.fullName ??
-                      borrowersById[loan.borrowerId]?.name ??
-                      loan.borrowerId,
+                  'borrowerName': borrowersById[loan.borrowerId]?.fullName ?? loan.borrowerId,
                   'branch': (borrowersById[loan.borrowerId]?.branch != null &&
                           borrowersById[loan.borrowerId]!.branch!.trim().isNotEmpty)
                       ? borrowersById[loan.borrowerId]!.branch!.trim()
