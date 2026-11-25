@@ -13,6 +13,8 @@ import '../../services/location_service.dart';
 import '../../services/pdf_export_service.dart';
 import '../../utils/indian_formatters.dart';
 import '../../widgets/aging_bucket_chart.dart';
+import '../../services/portfolio_intelligence_service.dart';
+import '../../widgets/conversion_deviation_intelligence_card.dart';
 import '../../widgets/portfolio_intelligence_panel.dart';
 import '../../widgets/governance_approvals_panel.dart';
 import '../../widgets/power_bi_dimension_slice_panel.dart';
@@ -625,9 +627,45 @@ class _MasterDashboardState extends State<MasterDashboard> {
               }
               return true;
             }).toList();
-            return PortfolioIntelligencePanel(
-              loans: slicedLoans,
-              borrowers: portfolio.borrowers,
+            final borrowersById = {
+              for (final b in portfolio.borrowers) b.borrowerId: b,
+            };
+            final intelligenceRecords = <LoanRecordMap>[
+              for (final loan in slicedLoans)
+                <String, dynamic>{
+                  'loanId': loan.loanId,
+                  'applicationNo': loan.applicationNo,
+                  'borrowerId': loan.borrowerId,
+                  'borrowerName': borrowersById[loan.borrowerId]?.fullName ??
+                      borrowersById[loan.borrowerId]?.name ??
+                      loan.borrowerId,
+                  'branch': (borrowersById[loan.borrowerId]?.branch != null &&
+                          borrowersById[loan.borrowerId]!.branch!.trim().isNotEmpty)
+                      ? borrowersById[loan.borrowerId]!.branch!.trim()
+                      : 'Unassigned',
+                  'agentId': loan.assignedAgentId,
+                  'status': loan.status.name,
+                  'amount': loan.principalSanctioned,
+                  'principalSanctioned': loan.principalSanctioned,
+                  'disbursedAmount': loan.netDisbursedAmount,
+                  'pos': loan.principalOutstanding,
+                  'emiAmount': loan.emiAmount,
+                  'dpd': loan.dpd,
+                  'isNpa': loan.dpd >= 90,
+                },
+            ];
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                PortfolioIntelligencePanel(
+                  loans: slicedLoans,
+                  borrowers: portfolio.borrowers,
+                ),
+                const SizedBox(height: 12),
+                ConversionDeviationIntelligenceCard(
+                  records: intelligenceRecords,
+                ),
+              ],
             );
           },
         ),
