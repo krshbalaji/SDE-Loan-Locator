@@ -1,3 +1,5 @@
+typedef LoanRecordMap = Map<String, dynamic>;
+
 enum FunnelStage { logged, sanctioned, disbursed, closedOrRejected }
 
 class FunnelConversionSummary {
@@ -149,7 +151,7 @@ class PortfolioIntelligenceService {
     return fallback;
   }
 
-  PortfolioIntelligenceReport analyze(List> rows) {
+  PortfolioIntelligenceReport analyze(List<LoanRecordMap> rows) {
     int loggedCount = 0;
     int sanctionedCount = 0;
     int disbursedCount = 0;
@@ -159,8 +161,8 @@ class PortfolioIntelligenceService {
     double sanctionedAmount = 0.0;
     double disbursedAmount = 0.0;
 
-    final byBranch = <String, List>>{};
-    final byPerson = <String, List>>{};
+    final byBranch = <String, List<LoanRecordMap>>{};
+    final byPerson = <String, List<LoanRecordMap>>{};
     final nameToIds = <String, Set<String>>{};
     final deviations = <IdentifierDeviationFinding>[];
 
