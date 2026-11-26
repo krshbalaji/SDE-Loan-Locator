@@ -80,7 +80,7 @@ class _TesterActivityReportScreenState
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
-    final isSuperAdmin = auth.currentUser?.isSuperAdmin == true;
+    final isSuperAdmin = (auth.currentUser?.isSuperAdmin ?? false) || (auth.currentUser?.isExecutive ?? false);
     final telemetry = context.watch<ActivityTelemetryService>();
     final sessions = telemetry.sessions;
 
@@ -133,7 +133,7 @@ class _TesterActivityReportScreenState
               child: Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                  'Restricted: Only Super Admin can view tester and user activity reports.',
+                  'Restricted: Only Super Admin or Executive leadership can view tester and user activity reports.',
                   textAlign: TextAlign.center,
                 ),
               ),

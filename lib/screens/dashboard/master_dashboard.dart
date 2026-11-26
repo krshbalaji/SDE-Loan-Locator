@@ -246,7 +246,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
             ),
           ),
           actions: [
-          if (context.read<AuthService>().currentUser?.isSuperAdmin == true)
+          if ((context.read<AuthService>().currentUser?.isSuperAdmin ?? false) || (context.read<AuthService>().currentUser?.isExecutive ?? false))
             IconButton(
               tooltip: 'Tester & User Activity Report',
               icon: const Icon(Icons.fact_check_outlined),
