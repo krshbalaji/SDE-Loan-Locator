@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/activity_telemetry_service.dart';
+import '../../services/auth_service.dart';
 
 class TesterActivityReportScreen extends StatefulWidget {
   const TesterActivityReportScreen({super.key});
@@ -78,6 +79,8 @@ class _TesterActivityReportScreenState
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthService>();
+    final isSuperAdmin = auth.currentUser?.isSuperAdmin == true;
     final telemetry = context.watch<ActivityTelemetryService>();
     final sessions = telemetry.sessions;
 
@@ -125,7 +128,17 @@ class _TesterActivityReportScreenState
           ),
         ],
       ),
-      body: sessions.isEmpty
+      body: !isSuperAdmin
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'Restricted: Only Super Admin can view tester and user activity reports.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
+          : sessions.isEmpty
           ? const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
