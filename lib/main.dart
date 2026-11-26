@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'firebase/firebase_options.dart';
+import 'services/activity_telemetry_service.dart';
 import 'services/audit_service.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_loan_service.dart';
@@ -52,6 +53,9 @@ class LoanLocatorApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<MakerCheckerService>(create: (ctx) => MakerCheckerService(useFirebase: useFirebase, auditService: ctx.read<AuditService>())),
+        ChangeNotifierProvider<ActivityTelemetryService>(
+          create: (_) => ActivityTelemetryService(useFirebase: useFirebase),
+        ),
         ChangeNotifierProvider<AuditService>(
           create: (_) => AuditService(useFirebase: useFirebase),
         ),
@@ -66,8 +70,12 @@ class LoanLocatorApp extends StatelessWidget {
           )..refresh(),
         ),
       ],
-      child: MaterialApp(
-        title: 'Saro Devi Enterprises — Loan Locator',
+      child: Builder(
+        builder: (context) => MaterialApp(
+          title: 'Saro Devi Enterprises — Loan Locator',
+          navigatorObservers: [
+            context.read<ActivityTelemetryService>().navigatorObserver,
+          ],
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
@@ -77,6 +85,7 @@ class LoanLocatorApp extends StatelessWidget {
           useMaterial3: true,
         ),
         home: const _AuthGate(),
+        ),
       ),
     );
   }
@@ -109,8 +118,14 @@ class _AuthGateState extends State<_AuthGate> {
 
     if (sessionKey != _lastSessionKey) {
       _lastSessionKey = sessionKey;
-      if (user != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final telemetry = context.read<ActivityTelemetryService>();
+        if (user == null) {
+          telemetry.endSession();
+          return;
+        }
+        telemetry.startSession(user, isDemoSession: auth.isDemoSession);
           if (!mounted) return;
           final portfolio = context.read<LoanPortfolioProvider>();
           if (auth.isDemoSession || !auth.useFirebase) {
@@ -118,8 +133,8 @@ class _AuthGateState extends State<_AuthGate> {
           } else {
             portfolio.switchToLiveFirestore();
           }
-        });
-      }
+        
+      });
     }
 
     if (user == null) {

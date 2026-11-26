@@ -5,6 +5,7 @@ import '../../engines/conveyance_engine.dart';
 import '../../engines/delinquency_engine.dart';
 import '../../models/loan_model.dart';
 import '../../models/loan_product_model.dart';
+import '../../services/activity_telemetry_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/app_update_service.dart';
 import '../../services/firestore_loan_service.dart';
@@ -20,6 +21,7 @@ import '../../widgets/governance_approvals_panel.dart';
 import '../../widgets/power_bi_dimension_slice_panel.dart';
 import '../../widgets/portfolio_visual_analytics_panel.dart';
 import '../admin/excel_import_screen.dart';
+import '../admin/tester_activity_report_screen.dart';
 import '../admin/team_allocation_screen.dart';
 import '../collections/collections_queue_screen.dart';
 import '../loans/loan_list_screen.dart';
@@ -244,6 +246,20 @@ class _MasterDashboardState extends State<MasterDashboard> {
             ),
           ),
           actions: [
+          IconButton(
+            tooltip: 'Tester & User Activity Report',
+            icon: const Icon(Icons.fact_check_outlined),
+            onPressed: () {
+              context
+                  .read<ActivityTelemetryService>()
+                  .logScreenView('Tester & User Activity Report');
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const TesterActivityReportScreen(),
+                ),
+              );
+            },
+          ),
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Cancel'),
@@ -391,7 +407,20 @@ class _MasterDashboardState extends State<MasterDashboard> {
           : pages[_selectedIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
-        onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+        onDestinationSelected: (i) {
+            setState(() => _selectedIndex = i);
+            const tabNames = [
+              'Executive BI',
+              'Loans',
+              'Map',
+              'Recovery Queue',
+              'Team',
+              'Import',
+              'Approvals',
+            ];
+            final label = i < tabNames.length ? tabNames[i] : 'Tab $i';
+            context.read<ActivityTelemetryService>().logScreenView(label);
+          },
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),

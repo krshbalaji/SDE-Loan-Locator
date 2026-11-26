@@ -1,16 +1,14 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_model.dart';
 
 class ActivityEventRecord {
   final DateTime timestamp;
-  final String type; // 'screen' | 'tab' | 'loan' | 'action'
+  final String type;
   final String label;
   final String? detail;
 
@@ -95,7 +93,11 @@ class TesterSessionRecord {
       };
 
   factory TesterSessionRecord.fromMap(Map<String, dynamic> map) {
-    final rawEvents = (map['events'] as List<dynamic>?) ?? const [];
+    final rawEvents = map['events'] is List ? (map['events'] as List) : const [];
+    final rawScreens =
+        map['screensVisited'] is List ? (map['screensVisited'] as List) : const [];
+    final rawReviewed =
+        map['itemsReviewed'] is List ? (map['itemsReviewed'] as List) : const [];
     return TesterSessionRecord(
       sessionId: map['sessionId']?.toString() ?? '',
       uid: map['uid']?.toString() ?? 'unknown',
@@ -113,15 +115,11 @@ class TesterSessionRecord {
           ? DateTime.tryParse(map['logoutAt'].toString())
           : null,
       activeSeconds: (map['activeSeconds'] as num?)?.toInt() ?? 0,
-      screensVisited: ((map['screensVisited'] as List<dynamic>?) ?? const [])
-          .map((e) => e.toString())
-          .toList(),
-      itemsReviewed: ((map['itemsReviewed'] as List<dynamic>?) ?? const [])
-          .map((e) => e.toString())
-          .toList(),
+      screensVisited: rawScreens.map((e) => e.toString()).toList(),
+      itemsReviewed: rawReviewed.map((e) => e.toString()).toList(),
       events: rawEvents
-          .whereType>()
-          .map(ActivityEventRecord.fromMap)
+          .whereType()
+          .map((e) => ActivityEventRecord.fromMap(Map<String, dynamic>.from(e)))
           .toList(),
     );
   }
@@ -146,10 +144,8 @@ class ActivityTelemetryService extends ChangeNotifier
   ActivityTelemetryService({required this.useFirebase}) {
     WidgetsBinding.instance.addObserver(this);
     _navigatorObserver = _TelemetryNavigatorObserver(this);
-    _loadLocalSessions();
   }
 
-  static const String _prefsKey = 'sde_tester_activity_sessions_v1';
   static const String _collectionName = 'tester_activity_sessions';
 
   final bool useFirebase;
@@ -183,33 +179,6 @@ class ActivityTelemetryService extends ChangeNotifier
       default:
         return 'Device';
     }
-  }
-
-  Future<void> _loadLocalSessions() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_prefsKey);
-      if (raw != null && raw.isNotEmpty) {
-        final decoded = jsonDecode(raw) as List<dynamic>;
-        _sessions
-          ..clear()
-          ..addAll(
-            decoded
-                .whereType>()
-                .map(TesterSessionRecord.fromMap),
-          );
-        _sessions.sort((a, b) => b.loginAt.compareTo(a.loginAt));
-        notifyListeners();
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _saveLocalSessions() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final trimmed = _sessions.take(150).map((s) => s.toMap()).toList();
-      await prefs.setString(_prefsKey, jsonEncode(trimmed));
-    } catch (_) {}
   }
 
   Future<void> _pushSessionToFirestore(TesterSessionRecord session) async {
@@ -247,7 +216,6 @@ class ActivityTelemetryService extends ChangeNotifier
         ..clear()
         ..addAll(byId.values);
       _sessions.sort((a, b) => b.loginAt.compareTo(a.loginAt));
-      await _saveLocalSessions();
     } catch (_) {
     } finally {
       _isSyncing = false;
@@ -279,7 +247,9 @@ class ActivityTelemetryService extends ChangeNotifier
       isDemoSession: isDemoSession,
       loginAt: now,
       lastActiveAt: now,
-      screensVisited: <String>[user.isAdminOrAbove ? 'Executive BI' : 'Agent Home'],
+      screensVisited: <String>[
+        user.isAdminOrAbove ? 'Executive BI' : 'Agent Home',
+      ],
       events: <ActivityEventRecord>[
         ActivityEventRecord(
           timestamp: now,
@@ -300,7 +270,6 @@ class ActivityTelemetryService extends ChangeNotifier
     });
 
     notifyListeners();
-    await _saveLocalSessions();
     await _pushSessionToFirestore(session);
   }
 
@@ -317,7 +286,6 @@ class ActivityTelemetryService extends ChangeNotifier
     _lastTickAt = now;
     session.lastActiveAt = now;
     notifyListeners();
-    _saveLocalSessions();
     if (persistRemote) {
       _pushSessionToFirestore(session);
     }
@@ -341,7 +309,6 @@ class ActivityTelemetryService extends ChangeNotifier
     _activeSession = null;
     _lastTickAt = null;
     notifyListeners();
-    await _saveLocalSessions();
     await _pushSessionToFirestore(session);
   }
 
@@ -361,7 +328,6 @@ class ActivityTelemetryService extends ChangeNotifier
       ),
     );
     notifyListeners();
-    _saveLocalSessions();
   }
 
   void logFeatureReviewed(String label, {String? detail}) {
@@ -383,7 +349,6 @@ class ActivityTelemetryService extends ChangeNotifier
       ),
     );
     notifyListeners();
-    _saveLocalSessions();
     _pushSessionToFirestore(session);
   }
 
