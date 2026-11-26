@@ -81,7 +81,7 @@ class _TesterActivityReportScreenState
       case _DatePreset.custom:
         final f = _fromDate != null ? fmt(_fromDate!) : 'start';
         final t = _toDate != null ? fmt(_toDate!) : 'end';
-        return '$f_to_$t';
+        return '${f}_to_${t}';
     }
   }
 
