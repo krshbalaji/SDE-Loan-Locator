@@ -312,6 +312,32 @@ class ActivityTelemetryService extends ChangeNotifier
   Future<void> endSession() async {
     final session = _activeSession;
     if (session == null) return;
+    if (session.isDemoSession && _demoTesterName != null && _demoStartedAt != null) {
+      final testerName = _demoTesterName!;
+      final roleLabel = _demoRoleLabel ?? session.roleLabel;
+      final startedAt = _demoStartedAt!;
+      final endedAt = DateTime.now();
+      final startGeo = _demoStartGeo;
+      final formattedEvents = session.events
+          .map((e) => '${e.timestamp.hour.toString().padLeft(2, '0')}:${e.timestamp.minute.toString().padLeft(2, '0')} - ${e.label}${e.detail != null ? ' (${e.detail})' : ''}')
+          .toList();
+
+      _demoTesterName = null;
+      _demoRoleLabel = null;
+      _demoStartGeo = null;
+      _demoStartedAt = null;
+
+      unawaited(
+        DemoAlertService.sendCompletionReport(
+          testerName: testerName,
+          demoRoleLabel: roleLabel,
+          startedAt: startedAt,
+          endedAt: endedAt,
+          startGeo: startGeo,
+          eventLines: formattedEvents,
+        ),
+      );
+    }
     _flushElapsedTime(persistRemote: false);
     final now = DateTime.now();
     session.logoutAt = now;

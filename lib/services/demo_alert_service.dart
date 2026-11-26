@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show HttpClient, Platform;
+import 'dart:io' show ContentType, HttpClient, Platform;
+import 'dart:js_interop';
 
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
@@ -13,7 +14,6 @@ class DemoAlertService {
   DemoAlertService._();
 
   // Configure via --dart-define=TELEGRAM_BOT_TOKEN=... and --dart-define=TELEGRAM_CHAT_ID=...
-  // or replace the fallback string constants below.
   static const String _botToken = String.fromEnvironment(
     'TELEGRAM_BOT_TOKEN',
     defaultValue: '',
@@ -149,7 +149,7 @@ class DemoAlertService {
         final req = web.XMLHttpRequest();
         req.open('POST', endpoint);
         req.setRequestHeader('Content-Type', 'application/json');
-        req.send(payload);
+        req.send(payload.toJS);
       } else if (!Platform.environment.containsKey('FLUTTER_TEST')) {
         final client = HttpClient();
         try {
