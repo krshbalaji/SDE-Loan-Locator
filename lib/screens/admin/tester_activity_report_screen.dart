@@ -143,6 +143,27 @@ class _TesterActivityReportScreenState
                   },
             icon: const Icon(Icons.copy_all),
           ),
+          IconButton(
+            tooltip: 'Download Audit CSV',
+            onPressed: sessions.isEmpty
+                ? null
+                : () async {
+                    final csv = context.read<ActivityTelemetryService>().buildAuditCsv(sessions);
+                    final csvName = 'tester_audit_events_${DateTime.now().toIso8601String().substring(0, 10)}.csv';
+                    final ok = await triggerTextFileDownload(csv, csvName);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? 'Downloaded $csvName to Downloads'
+                              : 'Prepared $csvName audit log',
+                        ),
+                      ),
+                    );
+                  },
+            icon: const Icon(Icons.download),
+          ),
         ],
       ),
       body: !isSuperAdmin
