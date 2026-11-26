@@ -571,6 +571,15 @@ class _MasterDashboardState extends State<MasterDashboard> {
               _selectedSliceAgentId = agentId;
               _selectedSliceProductId = productId;
             });
+            final parts = <String>[
+              if (branch != null && branch.isNotEmpty) 'Branch=$branch',
+              if (agentId != null && agentId.isNotEmpty) 'Agent=$agentId',
+              if (productId != null && productId.isNotEmpty) 'Product=$productId',
+            ];
+            context.read<ActivityTelemetryService>().logFeatureReviewed(
+                  'Portfolio Slice Filter',
+                  detail: parts.isEmpty ? 'Cleared' : parts.join(', '),
+                );
           },
           onResetSlices: () {
             setState(() {
@@ -578,6 +587,10 @@ class _MasterDashboardState extends State<MasterDashboard> {
               _selectedSliceAgentId = null;
               _selectedSliceProductId = null;
             });
+            context.read<ActivityTelemetryService>().logFeatureReviewed(
+                  'Portfolio Slice Filter',
+                  detail: 'Reset All',
+                );
           },
         ),
         const SizedBox(height: 12),
@@ -720,6 +733,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
                     ),
                     OutlinedButton.icon(
                       onPressed: () async {
+                    context.read<ActivityTelemetryService>().logFeatureReviewed('Exported Arrears PDF', detail: _selectedSliceBranch ?? 'All Branches');
                         final delinquent = portfolio.loans
                             .where((l) => l.dpd > 0)
                             .toList()
