@@ -544,6 +544,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                     if (borrower != null)
                       OutlinedButton.icon(
                         onPressed: () async {
+                          final telemetry = context.read<ActivityTelemetryService>();
                           final quote = AmortizationEngine.calculatePayoffQuote(
                             loan: loan,
                             activeSchedule: visibleSchedule,
@@ -556,7 +557,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                             quote: quote,
                           );
                           if (!mounted) return;
-                          context.read<ActivityTelemetryService>().logFeatureReviewed(
+                          telemetry.logFeatureReviewed(
                             'Generated Payoff Quote',
                             detail: '${loan.loanId} (${borrower.fullName}) • Total: ${IndianFormatters.formatInr(quote.totalPayoffAmount)}',
                           );
