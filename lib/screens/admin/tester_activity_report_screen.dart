@@ -1,7 +1,6 @@
 import '../../utils/report_file_saver_stub.dart'
     if (dart.library.js_interop) '../../utils/report_file_saver_web.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
