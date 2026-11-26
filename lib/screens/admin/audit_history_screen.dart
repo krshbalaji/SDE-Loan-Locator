@@ -1,3 +1,5 @@
+import 'package:provider/provider.dart';
+import '../../services/activity_telemetry_service.dart';
 import 'package:flutter/material.dart';
 import '../../services/audit_firestore_persistence.dart';
 import '../../services/audit_guardian_bridge.dart';
