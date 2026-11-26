@@ -11,16 +11,17 @@ import '../../services/auth_service.dart';
 Future<String> _saveReportToFile(String content, String fileName) async {
   try {
     final bytes = utf8.encode(content);
-    final _ = Uri.dataFromBytes(bytes, mimeType: 'text/plain', encoding: utf8);
-    final fileName = 'tester_activity_report_${DateTime.now().toIso8601String().substring(0, 10)}.txt'; final msg = await _saveReportToFile(content, fileName);
+    final _ = Uri.dataFromBytes(bytes, mimeType: 'text/plain; charset=utf-8');
+    await Clipboard.setData(ClipboardData(text: content));
     return kIsWeb
-        ? 'Prepared $fileName for download (also copied to clipboard)'
+        ? 'Prepared $fileName (report text copied for saving to .txt)'
         : 'Saved report summary ($fileName)';
   } catch (_) {
-    final fileName = 'tester_activity_report_${DateTime.now().toIso8601String().substring(0, 10)}.txt'; final msg = await _saveReportToFile(content, fileName);
+    await Clipboard.setData(ClipboardData(text: content));
     return 'Copied report summary to clipboard';
   }
 }
+
 
 class TesterActivityReportScreen extends StatefulWidget {
   const TesterActivityReportScreen({super.key});
