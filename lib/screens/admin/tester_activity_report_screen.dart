@@ -32,6 +32,69 @@ class TesterActivityReportScreen extends StatefulWidget {
 
 class _TesterActivityReportScreenState
     extends State<TesterActivityReportScreen> {
+  String _datePreset = 'all';
+  DateTime? _fromDate;
+  DateTime? _toDate;
+
+  DateTime _dayOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
+
+  bool _matchesDateFilter(TesterSessionRecord session) {
+    final day = _dayOnly(session.lastActiveAt);
+    final today = _dayOnly(DateTime.now());
+    if (_datePreset == 'today') {
+      return day == today;
+    }
+    if (_datePreset == '7d') {
+      final start = today.subtract(const Duration(days: 6));
+      return !day.isBefore(start) && !day.isAfter(today);
+    }
+    if (_datePreset == 'custom') {
+      if (_fromDate != null && day.isBefore(_dayOnly(_fromDate!))) {
+        return false;
+      }
+      if (_toDate != null && day.isAfter(_dayOnly(_toDate!))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  String _filterSlug() {
+    String dStr(DateTime d) => d.toIso8601String().substring(0, 10);
+    final now = DateTime.now();
+    if (_datePreset == 'today') return 'today_${dStr(now)}';
+    if (_datePreset == '7d') {
+      return '${dStr(now.subtract(const Duration(days: 6)))}_to_${dStr(now)}';
+    }
+    if (_datePreset == 'custom') {
+      final f = _fromDate != null ? dStr(_fromDate!) : 'any';
+      final t = _toDate != null ? dStr(_toDate!) : 'any';
+      return '$f_to_$t';
+    }
+    return 'all_${dStr(now)}';
+  }
+
+  Future<void> _pickDate({required bool isFrom}) async {
+    final initial = isFrom
+        ? (_fromDate ?? DateTime.now())
+        : (_toDate ?? _fromDate ?? DateTime.now());
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2024, 1, 1),
+      lastDate: DateTime(2100, 12, 31),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _datePreset = 'custom';
+      if (isFrom) {
+        _fromDate = picked;
+      } else {
+        _toDate = picked;
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -132,8 +195,8 @@ class _TesterActivityReportScreenState
             onPressed: sessions.isEmpty
                 ? null
                 : () async {
-                    final report = _buildTextSummary(sessions);
-                    final fileName = 'tester_activity_report_${DateTime.now().toIso8601String().substring(0, 10)}.txt'; final msg = await _saveReportToFile(report, fileName);
+                    final report = _buildTextSummary(filteredSessions);
+                    final fileName = 'tester_activity_report_$slug.txt'; final msg = await _saveReportToFile(report, fileName);
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -148,8 +211,8 @@ class _TesterActivityReportScreenState
             onPressed: sessions.isEmpty
                 ? null
                 : () async {
-                    final csv = context.read<ActivityTelemetryService>().buildAuditCsv(sessions);
-                    final csvName = 'tester_audit_events_${DateTime.now().toIso8601String().substring(0, 10)}.csv';
+                    final csv = context.read<ActivityTelemetryService>().buildAuditCsv(filteredSessions);
+                    final csvName = 'tester_audit_events_$slug.csv';
                     final ok = await triggerTextFileDownload(csv, csvName);
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -186,9 +249,57 @@ class _TesterActivityReportScreenState
                 ),
               ),
             )
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
+          : () {
+              final filteredSessions = sessions.where(_matchesDateFilter).toList();
+              final slug = _filterSlug();
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('All'),
+                        selected: _datePreset == 'all',
+                        onSelected: (_) => setState(() => _datePreset = 'all'),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Today'),
+                        selected: _datePreset == 'today',
+                        onSelected: (_) => setState(() => _datePreset = 'today'),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Last 7 Days'),
+                        selected: _datePreset == '7d',
+                        onSelected: (_) => setState(() => _datePreset = '7d'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => _pickDate(isFrom: true),
+                        icon: const Icon(Icons.date_range, size: 18),
+                        label: Text(
+                          _fromDate == null
+                              ? 'From'
+                              : 'From: ${_fromDate!.toIso8601String().substring(0, 10)}',
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => _pickDate(isFrom: false),
+                        icon: const Icon(Icons.event, size: 18),
+                        label: Text(
+                          _toDate == null
+                              ? 'To'
+                              : 'To: ${_toDate!.toIso8601String().substring(0, 10)}',
+                        ),
+                      ),
+                      Text(
+                        'Showing ${filteredSessions.length} of ${sessions.length}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                 Wrap(
                   spacing: 12,
                   runSpacing: 12,
@@ -293,7 +404,10 @@ class _TesterActivityReportScreenState
                     ),
                   ),
               ],
-            ),
+              ),
+            );
+          }(),
+
     );
   }
 }
@@ -334,10 +448,13 @@ class _SummaryChip extends StatelessWidget {
           ),
         ],
       ),
+              ),
+            );
+          }(),
+      ),
     );
   }
 }
-
 class _UserSummaryCard extends StatelessWidget {
   final List<TesterSessionRecord> userSessions;
   final String Function(int) formatDuration;
