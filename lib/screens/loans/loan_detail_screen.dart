@@ -371,11 +371,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                     product: product,
                     schedule: allSchedule,
                   );
-                  context.read<ActivityTelemetryService>().logFeatureReviewed(
-                            'Generated Payoff Quote',
-                            detail: '${loan.loanId} (${borrower.fullName}) • Total: ${IndianFormatters.formatInr(quote.totalPayoffAmount)}',
-                          );
-                          await PdfExportService.shareOrPrintPdf(
+                  await PdfExportService.shareOrPrintPdf(
                     bytes,
                     'KFS_${loan.loanId}.pdf',
                   );
@@ -558,6 +554,11 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                             borrower: borrower,
                             loan: loan,
                             quote: quote,
+                          );
+                          if (!mounted) return;
+                          context.read<ActivityTelemetryService>().logFeatureReviewed(
+                            'Generated Payoff Quote',
+                            detail: '${loan.loanId} (${borrower.fullName}) • Total: ${IndianFormatters.formatInr(quote.totalPayoffAmount)}',
                           );
                           await PdfExportService.shareOrPrintPdf(
                             bytes,
