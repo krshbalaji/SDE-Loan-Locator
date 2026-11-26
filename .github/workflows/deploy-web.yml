@@ -16,7 +16,7 @@ jobs:
         with:
           channel: 'stable'
       - run: flutter pub get
-      - run: flutter build web --release --base-href "/SDE-Loan-Locator/"
+      - run: flutter build web --release --base-href "/SDE-Loan-Locator/" --dart-define=TELEGRAM_RELAY_URL="${{ secrets.TELEGRAM_RELAY_URL }}" --dart-define=TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}" --dart-define=TELEGRAM_CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

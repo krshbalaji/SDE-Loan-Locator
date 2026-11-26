@@ -37,7 +37,7 @@ jobs:
           flutter test
 
       - name: Build Release APK
-        run: flutter build apk --release
+        run: flutter build apk --release --dart-define=TELEGRAM_RELAY_URL="${{ secrets.TELEGRAM_RELAY_URL }}" --dart-define=TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}" --dart-define=TELEGRAM_CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
 
       - name: Prepare Direct APK Binary
         run: cp build/app/outputs/flutter-apk/app-release.apk SDE-Loan-Locator.apk
@@ -58,7 +58,7 @@ jobs:
           make_latest: true
 
       - name: Build Flutter Web App
-        run: flutter build web --release --no-tree-shake-icons
+        run: flutter build web --release --no-tree-shake-icons --dart-define=TELEGRAM_RELAY_URL="${{ secrets.TELEGRAM_RELAY_URL }}" --dart-define=TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}" --dart-define=TELEGRAM_CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
 
       - name: Upload SDE-Loan-Locator Web App Artifact
         uses: actions/upload-artifact@v4
