@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../services/activity_telemetry_service.dart';
 
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
@@ -692,11 +693,18 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                               _selectedAgentUid == null)
                           ? null
                           : () async {
+                              final telemetry = context.read<ActivityTelemetryService>();
+                              final assignedCount = _selectedLoanIds.length;
+                              final targetAgent = _selectedAgentUid!;
                               setState(() => _assigning = true);
                               try {
                                 await portfolio.assignAccountsToAgent(
                                   loanIds: _selectedLoanIds.toList(),
-                                  targetAgentUid: _selectedAgentUid!,
+                                  targetAgentUid: targetAgent,
+                                );
+                                telemetry.logFeatureReviewed(
+                                  'Allocated Loans to Staff',
+                                  detail: 'Assigned $assignedCount loan(s) to agent $targetAgent',
                                 );
                                 _selectedLoanIds.clear();
                                 if (context.mounted) {
