@@ -246,21 +246,6 @@ class _MasterDashboardState extends State<MasterDashboard> {
             ),
           ),
           actions: [
-          if ((context.read<AuthService>().currentUser?.isSuperAdmin ?? false) || (context.read<AuthService>().currentUser?.isExecutive ?? false))
-            IconButton(
-              tooltip: 'Tester & User Activity Report',
-              icon: const Icon(Icons.fact_check_outlined),
-              onPressed: () {
-              context
-                  .read<ActivityTelemetryService>()
-                  .logScreenView('Tester & User Activity Report');
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const TesterActivityReportScreen(),
-                ),
-              );
-            },
-          ),
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Cancel'),
@@ -335,6 +320,21 @@ class _MasterDashboardState extends State<MasterDashboard> {
       appBar: AppBar(
         title: Text(titles[_selectedIndex]),
         actions: [
+          if ((user.isSuperAdmin) || (user.isExecutive))
+            IconButton(
+              tooltip: 'Tester & User Activity Report',
+              icon: const Icon(Icons.fact_check_outlined),
+              onPressed: () {
+                context
+                    .read<ActivityTelemetryService>()
+                    .logScreenView('Tester & User Activity Report');
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const TesterActivityReportScreen(),
+                  ),
+                );
+              },
+            ),
           if (portfolio.isDemoMode)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 6),
