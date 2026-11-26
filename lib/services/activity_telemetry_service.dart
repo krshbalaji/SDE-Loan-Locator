@@ -371,4 +371,31 @@ class ActivityTelemetryService extends ChangeNotifier
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
+
+  String buildAuditCsv(List<TesterSessionRecord> targetSessions) {
+    final buf = StringBuffer();
+    buf.writeln('timestamp_iso,session_id,display_name,user_email,role,branch,platform,event_type,label,detail');
+    String esc(String? v) {
+      final safe = (v ?? '').replaceAll('"', '""');
+      return '"$safe"';
+    }
+    for (final session in targetSessions) {
+      for (final ev in session.events) {
+        buf.writeln([
+          esc(ev.timestamp.toIso8601String()),
+          esc(session.sessionId),
+          esc(session.displayName),
+          esc(session.email),
+          esc(session.roleLabel),
+          esc(session.branch),
+          esc(session.platform),
+          esc(ev.type),
+          esc(ev.label),
+          esc(ev.detail),
+        ].join(','));
+      }
+    }
+    return buf.toString();
+  }
+
 }
