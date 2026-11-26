@@ -8,7 +8,6 @@ import 'package:provider/provider.dart';
 import '../../services/activity_telemetry_service.dart';
 import '../../services/auth_service.dart';
 
-
 Future<String> _saveReportToFile(String content, String fileName) async {
   final downloaded = await triggerTextFileDownload(content, fileName);
   await Clipboard.setData(ClipboardData(text: content));
@@ -20,8 +19,6 @@ Future<String> _saveReportToFile(String content, String fileName) async {
       : 'Copied $fileName summary to clipboard';
 }
 
-
-
 class TesterActivityReportScreen extends StatefulWidget {
   const TesterActivityReportScreen({super.key});
 
@@ -30,48 +27,62 @@ class TesterActivityReportScreen extends StatefulWidget {
       _TesterActivityReportScreenState();
 }
 
+enum _DatePreset { all, today, last7Days, custom }
+
 class _TesterActivityReportScreenState
     extends State<TesterActivityReportScreen> {
-  String _datePreset = 'all';
+  _DatePreset _preset = _DatePreset.all;
   DateTime? _fromDate;
   DateTime? _toDate;
 
-  DateTime _dayOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
-
-  bool _matchesDateFilter(TesterSessionRecord session) {
-    final day = _dayOnly(session.lastActiveAt);
-    final today = _dayOnly(DateTime.now());
-    if (_datePreset == 'today') {
-      return day == today;
-    }
-    if (_datePreset == '7d') {
-      final start = today.subtract(const Duration(days: 6));
-      return !day.isBefore(start) && !day.isAfter(today);
-    }
-    if (_datePreset == 'custom') {
-      if (_fromDate != null && day.isBefore(_dayOnly(_fromDate!))) {
-        return false;
-      }
-      if (_toDate != null && day.isAfter(_dayOnly(_toDate!))) {
-        return false;
-      }
-    }
-    return true;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<ActivityTelemetryService>().syncFromFirestore();
+    });
   }
 
-  String _filterSlug() {
-    String dStr(DateTime d) => d.toIso8601String().substring(0, 10);
+  DateTime _dayOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
+
+  bool _matchesRange(TesterSessionRecord session) {
+    final refDay = _dayOnly(session.lastActiveAt);
+    final today = _dayOnly(DateTime.now());
+    switch (_preset) {
+      case _DatePreset.all:
+        return true;
+      case _DatePreset.today:
+        return refDay == today;
+      case _DatePreset.last7Days:
+        final start = today.subtract(const Duration(days: 6));
+        return !refDay.isBefore(start) && !refDay.isAfter(today);
+      case _DatePreset.custom:
+        if (_fromDate != null && refDay.isBefore(_dayOnly(_fromDate!))) {
+          return false;
+        }
+        if (_toDate != null && refDay.isAfter(_dayOnly(_toDate!))) {
+          return false;
+        }
+        return true;
+    }
+  }
+
+  String _rangeSlug() {
+    String fmt(DateTime d) => d.toIso8601String().substring(0, 10);
     final now = DateTime.now();
-    if (_datePreset == 'today') return 'today_${dStr(now)}';
-    if (_datePreset == '7d') {
-      return '${dStr(now.subtract(const Duration(days: 6)))}_to_${dStr(now)}';
+    switch (_preset) {
+      case _DatePreset.all:
+        return 'all_${fmt(now)}';
+      case _DatePreset.today:
+        return 'today_${fmt(now)}';
+      case _DatePreset.last7Days:
+        return '${fmt(now.subtract(const Duration(days: 6)))}_to_${fmt(now)}';
+      case _DatePreset.custom:
+        final f = _fromDate != null ? fmt(_fromDate!) : 'start';
+        final t = _toDate != null ? fmt(_toDate!) : 'end';
+        return '${f}_to_${t}';
     }
-    if (_datePreset == 'custom') {
-      final f = _fromDate != null ? dStr(_fromDate!) : 'any';
-      final t = _toDate != null ? dStr(_toDate!) : 'any';
-      return '$f_to_$t';
-    }
-    return 'all_${dStr(now)}';
   }
 
   Future<void> _pickDate({required bool isFrom}) async {
@@ -86,21 +97,12 @@ class _TesterActivityReportScreenState
     );
     if (picked == null || !mounted) return;
     setState(() {
-      _datePreset = 'custom';
+      _preset = _DatePreset.custom;
       if (isFrom) {
         _fromDate = picked;
       } else {
         _toDate = picked;
       }
-    });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<ActivityTelemetryService>().syncFromFirestore();
     });
   }
 
@@ -131,87 +133,105 @@ class _TesterActivityReportScreenState
     final buf = StringBuffer()
       ..writeln('SDE LOAN LOCATOR — TESTER & USER ACTIVITY REPORT')
       ..writeln('Generated: ${_formatTimestamp(DateTime.now())}')
+      ..writeln('Date Range Filter: ${_rangeSlug()}')
       ..writeln('Total Sessions: ${sessions.length}')
       ..writeln('');
 
     final grouped = <String, List<TesterSessionRecord>>{};
     for (final s in sessions) {
-      grouped.putIfAbsent(s.uid, () => <TesterSessionRecord>[]).add(s);
+      grouped.putIfAbsent(s.email, () => <TesterSessionRecord>[]).add(s);
     }
 
     for (final entry in grouped.entries) {
-      final list = entry.value;
-      final first = list.first;
-      final totalSec =
-          list.fold<int>(0, (sum, s) => sum + s.activeSeconds);
-      final screens = list.expand((s) => s.screensVisited).toSet().toList();
-      final reviewed = list.expand((s) => s.itemsReviewed).toSet().toList();
+      final userSessions = entry.value;
+      final latest = userSessions.first;
+      final totalSecs = userSessions.fold<int>(
+        0,
+        (sum, item) => sum + item.activeSeconds,
+      );
+      final screens = <String>{
+        for (final item in userSessions) ...item.screensVisited,
+      }.toList();
+      final reviewed = <String>{
+        for (final item in userSessions) ...item.itemsReviewed,
+      }.toList();
+
       buf
-        ..writeln('User: ${first.displayName} (${first.roleLabel})')
-        ..writeln('  Logins: ${list.length} | Active Time: ${_formatDuration(totalSec)}')
-        ..writeln('  Last Active: ${_formatTimestamp(first.lastActiveAt)} (${first.platform})')
-        ..writeln('  Screens Visited: ${screens.isEmpty ? "None" : screens.join(", ")}')
-        ..writeln('  Reviewed Actions: ${reviewed.isEmpty ? "None" : reviewed.join(", ")}')
-        ..writeln('');
+        ..writeln('User: ${entry.key} (${latest.roleLabel})')
+        ..writeln(
+          '  Logins: ${userSessions.length} | Active Time: ${_formatDuration(totalSecs)}',
+        )
+        ..writeln(
+          '  Last Active: ${_formatTimestamp(latest.lastActiveAt)} (${latest.platform})',
+        )
+        ..writeln(
+          '  Screens Visited: ${screens.isEmpty ? "None" : screens.join(", ")}',
+        );
+      if (reviewed.isNotEmpty) {
+        buf.writeln('  Reviewed Actions: ${reviewed.join(", ")}');
+      }
+      buf.writeln('');
     }
+
     return buf.toString();
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
-    final isSuperAdmin = (auth.currentUser?.isSuperAdmin ?? false) || (auth.currentUser?.isExecutive ?? false);
     final telemetry = context.watch<ActivityTelemetryService>();
-    final sessions = telemetry.sessions;
+    final role = (auth.currentRole ?? '').toLowerCase();
+    final isSuperAdmin = role == 'superadmin' || role == 'executive';
+    final allSessions = telemetry.sessions;
+    final filteredSessions = allSessions.where(_matchesRange).toList();
+    final slug = _rangeSlug();
 
-    final groupedByUser = <String, List<TesterSessionRecord>>{};
-    for (final s in sessions) {
-      groupedByUser.putIfAbsent(s.uid, () => <TesterSessionRecord>[]).add(s);
-    }
-
-    final totalActiveSeconds =
-        sessions.fold<int>(0, (sum, s) => sum + s.activeSeconds);
+    final totalSeconds = filteredSessions.fold<int>(
+      0,
+      (sum, item) => sum + item.activeSeconds,
+    );
+    final uniqueUsers = <String>{
+      for (final s in filteredSessions) s.email,
+    }.length;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Tester & User Activity Report'),
         actions: [
-          if (telemetry.useFirebase)
-            IconButton(
-              tooltip: 'Sync from Firestore',
-              onPressed: telemetry.isSyncing
-                  ? null
-                  : () => telemetry.syncFromFirestore(),
-              icon: telemetry.isSyncing
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.sync),
-            ),
           IconButton(
-            tooltip: 'Copy Report Summary',
-            onPressed: sessions.isEmpty
+            tooltip: 'Refresh Telemetry',
+            onPressed: telemetry.isSyncing
+                ? null
+                : () => telemetry.syncFromFirestore(),
+            icon: telemetry.isSyncing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sync),
+          ),
+          IconButton(
+            tooltip: 'Download Report Summary (.txt)',
+            onPressed: filteredSessions.isEmpty
                 ? null
                 : () async {
                     final report = _buildTextSummary(filteredSessions);
-                    final fileName = 'tester_activity_report_$slug.txt'; final msg = await _saveReportToFile(report, fileName);
+                    final fileName = 'tester_activity_report_$slug.txt';
+                    final msg = await _saveReportToFile(report, fileName);
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(msg),
-                      ),
+                      SnackBar(content: Text(msg)),
                     );
                   },
             icon: const Icon(Icons.copy_all),
           ),
           IconButton(
-            tooltip: 'Download Audit CSV',
-            onPressed: sessions.isEmpty
+            tooltip: 'Download Audit CSV (.csv)',
+            onPressed: filteredSessions.isEmpty
                 ? null
                 : () async {
-                    final csv = context.read<ActivityTelemetryService>().buildAuditCsv(filteredSessions);
+                    final csv = telemetry.buildAuditCsv(filteredSessions);
                     final csvName = 'tester_audit_events_$slug.csv';
                     final ok = await triggerTextFileDownload(csv, csvName);
                     if (!context.mounted) return;
@@ -239,243 +259,277 @@ class _TesterActivityReportScreenState
                 ),
               ),
             )
-          : sessions.isEmpty
-          ? const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'No tester or user sessions recorded yet. Log in and navigate screens to capture usage telemetry.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            )
-          : () {
-              final filteredSessions = sessions.where(_matchesDateFilter).toList();
-              final slug = _filterSlug();
-              return ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('All'),
-                        selected: _datePreset == 'all',
-                        onSelected: (_) => setState(() => _datePreset = 'all'),
-                      ),
-                      ChoiceChip(
-                        label: const Text('Today'),
-                        selected: _datePreset == 'today',
-                        onSelected: (_) => setState(() => _datePreset = 'today'),
-                      ),
-                      ChoiceChip(
-                        label: const Text('Last 7 Days'),
-                        selected: _datePreset == '7d',
-                        onSelected: (_) => setState(() => _datePreset = '7d'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () => _pickDate(isFrom: true),
-                        icon: const Icon(Icons.date_range, size: 18),
-                        label: Text(
-                          _fromDate == null
-                              ? 'From'
-                              : 'From: ${_fromDate!.toIso8601String().substring(0, 10)}',
-                        ),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () => _pickDate(isFrom: false),
-                        icon: const Icon(Icons.event, size: 18),
-                        label: Text(
-                          _toDate == null
-                              ? 'To'
-                              : 'To: ${_toDate!.toIso8601String().substring(0, 10)}',
-                        ),
-                      ),
-                      Text(
-                        'Showing ${filteredSessions.length} of ${sessions.length}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
                 Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    _SummaryChip(
-                      label: 'Active Users / Testers',
-                      value: '${groupedByUser.length}',
-                      icon: Icons.people_outline,
+                    ChoiceChip(
+                      label: const Text('All'),
+                      selected: _preset == _DatePreset.all,
+                      onSelected: (_) =>
+                          setState(() => _preset = _DatePreset.all),
                     ),
-                    _SummaryChip(
-                      label: 'Total Login Sessions',
-                      value: '${sessions.length}',
-                      icon: Icons.login,
+                    ChoiceChip(
+                      label: const Text('Today'),
+                      selected: _preset == _DatePreset.today,
+                      onSelected: (_) =>
+                          setState(() => _preset = _DatePreset.today),
                     ),
-                    _SummaryChip(
-                      label: 'Total Time Spent',
-                      value: _formatDuration(totalActiveSeconds),
-                      icon: Icons.timer_outlined,
+                    ChoiceChip(
+                      label: const Text('Last 7 Days'),
+                      selected: _preset == _DatePreset.last7Days,
+                      onSelected: (_) =>
+                          setState(() => _preset = _DatePreset.last7Days),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _pickDate(isFrom: true),
+                      icon: const Icon(Icons.date_range, size: 18),
+                      label: Text(
+                        _fromDate == null
+                            ? 'From'
+                            : 'From: ${_fromDate!.toIso8601String().substring(0, 10)}',
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _pickDate(isFrom: false),
+                      icon: const Icon(Icons.event, size: 18),
+                      label: Text(
+                        _toDate == null
+                            ? 'To'
+                            : 'To: ${_toDate!.toIso8601String().substring(0, 10)}',
+                      ),
+                    ),
+                    if (_preset == _DatePreset.custom)
+                      TextButton(
+                        onPressed: () => setState(() {
+                          _preset = _DatePreset.all;
+                          _fromDate = null;
+                          _toDate = null;
+                        }),
+                        child: const Text('Clear Dates'),
+                      ),
+                    Text(
+                      'Showing ${filteredSessions.length} of ${allSessions.length} sessions',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'User & Tester Summary',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                for (final entry in groupedByUser.entries)
-                  _UserSummaryCard(
-                    userSessions: entry.value,
-                    formatDuration: _formatDuration,
-                    formatTimestamp: _formatTimestamp,
+                const SizedBox(height: 12),
+                if (filteredSessions.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 48),
+                    child: Center(
+                      child: Text(
+                        'No tester or user sessions match the selected date range.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  )
+                else ...[
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      _SummaryChip(
+                        label: 'Active Users / Testers',
+                        value: '$uniqueUsers',
+                        icon: Icons.people_outline,
+                      ),
+                      _SummaryChip(
+                        label: 'Total Login Sessions',
+                        value: '${filteredSessions.length}',
+                        icon: Icons.login,
+                      ),
+                      _SummaryChip(
+                        label: 'Total Time Spent',
+                        value: _formatDuration(totalSeconds),
+                        icon: Icons.timer_outlined,
+                      ),
+                    ],
                   ),
-                const SizedBox(height: 16),
-                Text(
-                  'Session-by-Session Audit Trail',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                for (final session in sessions)
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: ExpansionTile(
-                      leading: Icon(
-                        session.logoutAt == null
-                            ? Icons.radio_button_checked
-                            : Icons.history,
-                        color: session.logoutAt == null
-                            ? Colors.green
-                            : Theme.of(context).colorScheme.primary,
-                      ),
-                      title: Text(
-                        '${session.displayName} • ${_formatDuration(session.activeSeconds)}',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      subtitle: Text(
-                        'Login: ${_formatTimestamp(session.loginAt)} | ${session.platform} | '
-                        '${session.screensVisited.length} screens',
-                      ),
-                      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Screens Visited: ${session.screensVisited.join(" -> ")}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'User & Tester Summary',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._buildUserSummaries(filteredSessions),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Session-by-Session Audit Trail',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...filteredSessions.map(
+                    (session) => Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: ExpansionTile(
+                        leading: Icon(
+                          session.logoutAt == null
+                              ? Icons.radio_button_checked
+                              : Icons.history,
                         ),
-                        if (session.itemsReviewed.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Reviewed Items: ${session.itemsReviewed.join(" | ")}',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ),
-                        ],
-                        const Divider(height: 16),
-                        for (final ev in session.events.reversed.take(15))
+                        title: Text(
+                          '${session.email} • ${_formatDuration(session.activeSeconds)}',
+                        ),
+                        subtitle: Text(
+                          'Login: ${_formatTimestamp(session.loginAt)} | ${session.platform} | ${session.screensVisited.length} screens',
+                        ),
+                        children: [
                           Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  _formatTimestamp(ev.timestamp).split(' ').last,
-                                  style: Theme.of(context).textTheme.labelSmall,
+                                  'Screens: ${session.screensVisited.isEmpty ? "None" : session.screensVisited.join(" -> ")}',
+                                  style: Theme.of(context).textTheme.bodySmall,
                                 ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    ev.detail != null && ev.detail!.isNotEmpty
-                                        ? '${ev.label} (${ev.detail})'
-                                        : ev.label,
-                                    style: Theme.of(context).textTheme.bodySmall,
+                                if (session.itemsReviewed.isNotEmpty) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Reviewed Actions: ${session.itemsReviewed.join(", ")}',
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
                                   ),
-                                ),
+                                ],
+                                if (session.events.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  ...session.events.map(
+                                    (ev) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 4),
+                                      child: Text(
+                                        '• [${_formatTimestamp(ev.timestamp)}] ${ev.label}${ev.detail == null || ev.detail!.isEmpty ? "" : " — ${ev.detail}"}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
+                ],
               ],
-              ),
-            );
-          }(),
-
+            ),
     );
+  }
+
+  List<Widget> _buildUserSummaries(List<TesterSessionRecord> sessions) {
+    final grouped = <String, List<TesterSessionRecord>>{};
+    for (final s in sessions) {
+      grouped.putIfAbsent(s.email, () => <TesterSessionRecord>[]).add(s);
+    }
+    return grouped.entries.map((entry) {
+      final userSessions = entry.value;
+      final latest = userSessions.first;
+      final totalSeconds = userSessions.fold<int>(
+        0,
+        (sum, item) => sum + item.activeSeconds,
+      );
+      final screens = <String>{
+        for (final item in userSessions) ...item.screensVisited,
+      }.toList();
+      final reviewed = <String>{
+        for (final item in userSessions) ...item.itemsReviewed,
+      }.toList();
+
+      return _UserSummaryCard(
+        email: entry.key,
+        roleLabel: latest.roleLabel,
+        platform: latest.platform,
+        loginCount: userSessions.length,
+        lastActiveText: _formatTimestamp(latest.lastActiveAt),
+        totalSeconds: totalSeconds,
+        screens: screens,
+        reviewed: reviewed,
+        formatDuration: _formatDuration,
+      );
+    }).toList();
   }
 }
 
 class _SummaryChip extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
   const _SummaryChip({
     required this.label,
     required this.value,
     required this.icon,
   });
 
+  final String label;
+  final String value;
+  final IconData icon;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Theme.of(context)
-            .colorScheme
-            .surfaceContainerHighest
-            .withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 20),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: Theme.of(context).textTheme.labelSmall),
-              Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-        ],
-      ),
-              ),
-            );
-          }(),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
-class _UserSummaryCard extends StatelessWidget {
-  final List<TesterSessionRecord> userSessions;
-  final String Function(int) formatDuration;
-  final String Function(DateTime) formatTimestamp;
 
+class _UserSummaryCard extends StatelessWidget {
   const _UserSummaryCard({
-    required this.userSessions,
+    required this.email,
+    required this.roleLabel,
+    required this.platform,
+    required this.loginCount,
+    required this.lastActiveText,
+    required this.totalSeconds,
+    required this.screens,
+    required this.reviewed,
     required this.formatDuration,
-    required this.formatTimestamp,
   });
+
+  final String email;
+  final String roleLabel;
+  final String platform;
+  final int loginCount;
+  final String lastActiveText;
+  final int totalSeconds;
+  final List<String> screens;
+  final List<String> reviewed;
+  final String Function(int) formatDuration;
 
   @override
   Widget build(BuildContext context) {
-    final latest = userSessions.first;
-    final totalSeconds =
-        userSessions.fold<int>(0, (sum, s) => sum + s.activeSeconds);
-    final screens =
-        userSessions.expand((s) => s.screensVisited).toSet().toList();
-    final reviewed =
-        userSessions.expand((s) => s.itemsReviewed).toSet().toList();
-
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
@@ -484,10 +538,11 @@ class _UserSummaryCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Text(
-                    '${latest.displayName} (${latest.roleLabel})',
+                    '$email ($roleLabel)',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -502,7 +557,7 @@ class _UserSummaryCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Logins: ${userSessions.length} • Last Active: ${formatTimestamp(latest.lastActiveAt)} • Platform: ${latest.platform}',
+              'Logins: $loginCount • Last Active: $lastActiveText • Platform: $platform',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 6),
