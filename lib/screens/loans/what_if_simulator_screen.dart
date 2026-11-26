@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../services/activity_telemetry_service.dart';
 
 import '../../engines/amortization_engine.dart';
 import '../../models/borrower_model.dart';
@@ -90,7 +91,13 @@ class _WhatIfSimulatorScreenState extends State<WhatIfSimulatorScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () {
+                          context.read<ActivityTelemetryService>().logFeatureReviewed(
+                            'Approved Loan Restructure',
+                            detail: '$label • ${widget.loan.loanId} • Principal: ${IndianFormatters.formatInr(newPrincipal)} • Tenure: ${newTenure}m',
+                          );
+                          Navigator.pop(ctx, true);
+                        },
             child: const Text('Approve & Restructure'),
           ),
         ],

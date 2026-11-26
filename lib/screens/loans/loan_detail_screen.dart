@@ -5,6 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
+import '../../services/activity_telemetry_service.dart';
 
 import '../../engines/amortization_engine.dart';
 import '../../models/borrower_model.dart';
@@ -370,7 +371,11 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                     product: product,
                     schedule: allSchedule,
                   );
-                  await PdfExportService.shareOrPrintPdf(
+                  context.read<ActivityTelemetryService>().logFeatureReviewed(
+                            'Generated Payoff Quote',
+                            detail: '${loan.loanId} (${borrower.fullName}) • Total: ${IndianFormatters.formatInr(quote.totalPayoffAmount)}',
+                          );
+                          await PdfExportService.shareOrPrintPdf(
                     bytes,
                     'KFS_${loan.loanId}.pdf',
                   );
@@ -548,8 +553,8 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                             activeSchedule: visibleSchedule,
                             asOfDate: DateTime.now(),
                           );
-                          final bytes =
-                              await PdfExportService.buildPayoffQuotePdf(
+                          final bytes = await PdfExportService.buildPayoffQuotePdf(
+                          
                             borrower: borrower,
                             loan: loan,
                             quote: quote,
@@ -1044,6 +1049,10 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                   );
                   return;
                 }
+                context.read<ActivityTelemetryService>().logFeatureReviewed(
+                  'Updated Borrower Geo Pin',
+                  detail: '${borrower.borrowerId} (${borrower.fullName}) • Lat: $lat, Lng: $lng',
+                );
                 await portfolio.verifyBorrowerGeoPin(
                   borrowerId: borrower.borrowerId,
                   latitude: lat,
