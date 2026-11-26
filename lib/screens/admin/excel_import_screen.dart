@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../services/activity_telemetry_service.dart';
 
 import '../../models/loan_model.dart';
 import '../../models/loan_product_model.dart';
@@ -145,6 +146,7 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
     );
     if (reviewSnapshot == null || !mounted) return;
 
+    final telemetry = context.read<ActivityTelemetryService>();
     setState(() => _committing = true);
     try {
       final count = await ExcelImportService.commitImport(
@@ -157,6 +159,10 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
       );
       if (!mounted) return;
       final skipped = parse.rows.length - count;
+      telemetry.logFeatureReviewed(
+        'Committed Bulk Loan Import',
+        detail: 'Imported $count/${parse.rows.length} rows (${_importMode.name}) • Skipped: $skipped',
+      );
       final skipNote = skipped > 0 ? ' ($skipped invalid row(s) skipped)' : '';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
