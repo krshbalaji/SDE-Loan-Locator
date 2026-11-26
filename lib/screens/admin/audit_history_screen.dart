@@ -26,6 +26,7 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
   ChangeSource? _sourceFilter;
 
   Future<void> _rollbackBatch(BatchSnapshot batch) async {
+    final telemetry = context.read<ActivityTelemetryService>();
     final reverted = widget.bridge.rollbackBatchId(
       batchId: batch.batchId,
       liveStoreById: widget.liveStoreById,
@@ -35,6 +36,12 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
       await widget.persistence!.markBatchRolledBack(
         batchId: batch.batchId,
         rolledBackAt: DateTime.now(),
+      );
+    }
+    if (reverted > 0) {
+      telemetry.logFeatureReviewed(
+        'Rolled Back Audit Batch',
+        detail: 'Batch ${batch.batchId} (${batch.label}) • Source: ${batch.source.name} • Reverted: $reverted record(s)',
       );
     }
     if (!mounted) return;
