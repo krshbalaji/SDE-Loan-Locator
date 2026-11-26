@@ -242,7 +242,7 @@ class ActivityTelemetryService extends ChangeNotifier
       displayName: user.displayName,
       email: user.email,
       roleLabel: user.role.name,
-      branch: user.branch ?? 'All Branches',
+      branch: user.branch.isNotEmpty ? user.branch : 'All Branches',
       platform: _detectPlatform(),
       isDemoSession: isDemoSession,
       loginAt: now,
