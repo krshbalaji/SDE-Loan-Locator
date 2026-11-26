@@ -6,6 +6,7 @@ import '../../engines/geo_filter_engine.dart';
 import '../../models/borrower_model.dart';
 import '../../models/loan_model.dart';
 import '../../models/loan_product_model.dart';
+import '../../services/activity_telemetry_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_loan_service.dart';
 import '../../services/location_service.dart';
@@ -394,13 +395,19 @@ class _LoanListScreenState extends State<LoanListScreen> {
                       return Card(
                         margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  LoanDetailScreen(loanId: loan.loanId),
-                            ),
-                          ),
+                          onTap: () {
+                            context.read<ActivityTelemetryService>().logFeatureReviewed(
+                                  'Opened Loan',
+                                  detail: '${loan.loanId} (${borrower?.fullName ?? loan.borrowerId})',
+                                );
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    LoanDetailScreen(loanId: loan.loanId),
+                              ),
+                            );
+                          },
                           leading: CircleAvatar(
                             backgroundColor: dpdColor.withValues(alpha: 0.14),
                             child: Text(
