@@ -47,10 +47,6 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
 
   Future<void> _refreshLocation() async {
     final loc = await LocationService.getCurrentLocation();
-    telemetry.logFeatureReviewed(
-      'Stamped Field GPS Check-In',
-      detail: 'Loan ${pin.primaryLoan.loanId} (${pin.borrower.fullName}) • ${check.distanceMeters.toStringAsFixed(0)}m • Verified: ${check.isVerified}',
-    );
     if (!mounted) return;
     setState(() {
       _originLat = loc.latitude;
@@ -118,6 +114,11 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
               : 'Check-in stamped (${(check.distanceMeters / 1000).toStringAsFixed(2)} km from pin).',
         ),
       ),
+    );
+
+    telemetry.logFeatureReviewed(
+      'Stamped Field GPS Check-In',
+      detail: 'Loan ${pin.primaryLoan.loanId} (${pin.borrower.fullName}) • ${check.distanceMeters.toStringAsFixed(0)}m • Verified: ${check.isVerified}',
     );
 
     // Immediately launch Customer-Anchored Nearby Pending Radar
