@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../services/activity_telemetry_service.dart';
 
 import '../../engines/conveyance_engine.dart';
 import '../../engines/delinquency_engine.dart';
@@ -171,7 +172,10 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: () => setState(() => _selectedIndex = 1),
+                  onPressed: () {
+                    context.read<ActivityTelemetryService>().logFeatureReviewed('Started Field Route');
+                    setState(() => _selectedIndex = 1);
+                  },
                   icon: const Icon(Icons.route),
                   label: const Text('Start Field Route'),
                 ),
@@ -179,7 +183,10 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton.tonalIcon(
-                  onPressed: () => setState(() => _selectedIndex = 2),
+                  onPressed: () {
+                    context.read<ActivityTelemetryService>().logFeatureReviewed('Opened Collections Queue');
+                    setState(() => _selectedIndex = 2);
+                  },
                   icon: const Icon(Icons.assignment_late),
                   label: const Text('Collections Queue'),
                 ),

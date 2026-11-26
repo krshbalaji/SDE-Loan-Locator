@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../services/activity_telemetry_service.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/firestore_loan_service.dart';
@@ -25,10 +26,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleLogin() async {
     final auth = context.read<AuthService>();
+    final telemetry = context.read<ActivityTelemetryService>();
     final ok = await auth.signInWithEmailPassword(
       _emailController.text,
       _passwordController.text,
     );
+    if (ok) {
+      telemetry.logFeatureReviewed(
+        'Signed In With Credentials',
+        detail: _emailController.text.trim(),
+      );
+    }
     if (!mounted) return;
     if (!ok && auth.errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -210,7 +218,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 size: 16,
                               ),
                               label: Text(user.displayName.split(' (').first),
-                              onPressed: () { context.read<LoanPortfolioProvider>().switchToDemoSandbox(); auth.signInAsDemoUser(user); },
+                              onPressed: () { context.read<LoanPortfolioProvider>().switchToDemoSandbox(); context.read<ActivityTelemetryService>().logFeatureReviewed('Entered Demo Sandbox', detail: user.role.name); auth.signInAsDemoUser(user); },
                             ),
                         ],
                       ),
