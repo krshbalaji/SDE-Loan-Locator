@@ -24,6 +24,95 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  static const String _demoAccessPasscode = 'demo1234';
+
+  String _demoRoleLabel(AppUser user) {
+    switch (user.role) {
+      case UserRole.superAdmin:
+        return 'Demo - Super Admin';
+      case UserRole.ceo:
+        return user.uid == 'uid_demo_tester' ? 'Demo - Tester (CEO)' : 'Demo - CEO';
+      case UserRole.md:
+        return 'Demo - MD';
+      case UserRole.areaManager:
+        return 'Demo - Area Manager';
+      case UserRole.branchManager:
+        return 'Demo - Branch Manager';
+      case UserRole.collectionManager:
+        return 'Demo - Collection Manager';
+      case UserRole.agent:
+        return 'Demo - Collection Agent (${user.displayName.split(' ').first})';
+    }
+  }
+
+  Future<void> _openDemoRolePasswordDialog(AppUser user) async {
+    final passCtrl = TextEditingController(text: _demoAccessPasscode);
+    String? errorText;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(_demoRoleLabel(user)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Dedicated sandbox profile: ${user.displayName}\n${user.email} • ${user.branch}',
+                style: const TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: passCtrl,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'Demo Access Password',
+                  border: const OutlineInputBorder(),
+                  errorText: errorText,
+                ),
+                onSubmitted: (_) {
+                  if (passCtrl.text == _demoAccessPasscode) {
+                    Navigator.pop(ctx, true);
+                  } else {
+                    setDialogState(() => errorText = 'Invalid demo password');
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (passCtrl.text == _demoAccessPasscode) {
+                  Navigator.pop(ctx, true);
+                } else {
+                  setDialogState(() => errorText = 'Invalid demo password');
+                }
+              },
+              child: const Text('Launch Demo'),
+            ),
+          ],
+        ),
+      ),
+    );
+    passCtrl.dispose();
+    if (confirmed != true || !mounted) return;
+
+    final portfolio = context.read<LoanPortfolioProvider>();
+    final auth = context.read<AuthService>();
+    final telemetry = context.read<ActivityTelemetryService>();
+    await portfolio.switchToDemoSandbox();
+    telemetry.logFeatureReviewed(
+      'Entered Demo Sandbox',
+      detail: '${_demoRoleLabel(user)} (${user.role.wireValue})',
+    );
+    auth.signInAsDemoUser(user);
+  }
+
   Future<void> _handleLogin() async {
     final auth = context.read<AuthService>();
     final telemetry = context.read<ActivityTelemetryService>();
@@ -194,10 +283,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: TextStyle(fontSize: 12, color: Colors.black54),
                         ),
                       ),
-                    if (!auth.useFirebase) ...[
+                    if (auth.demoLoginEnabled || !auth.useFirebase) ...[
                       const Divider(height: 28),
                       Text(
-                        'Quick Role Access (RBAC Preview)',
+                        'Hierarchy Demo Logins (Password Protected)',
                         style: Theme.of(context).textTheme.labelLarge,
                         textAlign: TextAlign.center,
                       ),
@@ -217,8 +306,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                         : Icons.location_on,
                                 size: 16,
                               ),
-                              label: Text(user.displayName.split(' (').first),
-                              onPressed: () { context.read<LoanPortfolioProvider>().switchToDemoSandbox(); context.read<ActivityTelemetryService>().logFeatureReviewed('Entered Demo Sandbox', detail: user.role.name); auth.signInAsDemoUser(user); },
+                              label: Text(_demoRoleLabel(user)),
+                              onPressed: auth.isLoading
+                                  ? null
+                                  : () => _openDemoRolePasswordDialog(user),
                             ),
                         ],
                       ),

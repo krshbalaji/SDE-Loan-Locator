@@ -55,6 +55,15 @@ class AuthService extends ChangeNotifier {
 
   static const List<AppUser> demoUsers = [
     AppUser(
+      uid: 'uid_demo_superadmin',
+      email: 'superadmin@sde-finance.in',
+      displayName: 'Demo - Super Admin',
+      role: UserRole.superAdmin,
+      phone: '+919842100099',
+      zone: 'All Zones',
+      branch: 'Madurai HQ',
+    ),
+    AppUser(
       uid: 'uid_demo_tester',
       email: 'demo@sde-finance.in',
       displayName: 'Demo User (Tester)',
