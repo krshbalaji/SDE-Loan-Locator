@@ -137,8 +137,8 @@ class _TesterActivityReportScreenState
                     final fileName = 'tester_activity_report_${DateTime.now().toIso8601String().substring(0, 10)}.txt'; final msg = await _saveReportToFile(report, fileName);
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Tester activity report copied to clipboard.'),
+                      SnackBar(
+                        content: Text(msg),
                       ),
                     );
                   },
