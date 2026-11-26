@@ -180,8 +180,7 @@ class _TesterActivityReportScreenState
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
     final telemetry = context.watch<ActivityTelemetryService>();
-    final role = (auth.currentRole ?? '').toLowerCase();
-    final isSuperAdmin = role == 'superadmin' || role == 'executive';
+    final isSuperAdmin = auth.currentUser?.isExecutive == true;
     final allSessions = telemetry.sessions;
     final filteredSessions = allSessions.where(_matchesRange).toList();
     final slug = _rangeSlug();
