@@ -1,3 +1,5 @@
+import '../../utils/report_file_saver_stub.dart'
+    if (dart.library.js_interop) '../../utils/report_file_saver_web.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -9,18 +11,16 @@ import '../../services/auth_service.dart';
 
 
 Future<String> _saveReportToFile(String content, String fileName) async {
-  try {
-    final bytes = utf8.encode(content);
-    final _ = Uri.dataFromBytes(bytes, mimeType: 'text/plain; charset=utf-8');
-    await Clipboard.setData(ClipboardData(text: content));
-    return kIsWeb
-        ? 'Prepared $fileName (report text copied for saving to .txt)'
-        : 'Saved report summary ($fileName)';
-  } catch (_) {
-    await Clipboard.setData(ClipboardData(text: content));
-    return 'Copied report summary to clipboard';
+  final downloaded = await triggerTextFileDownload(content, fileName);
+  await Clipboard.setData(ClipboardData(text: content));
+  if (downloaded) {
+    return 'Downloaded $fileName to Downloads (also copied to clipboard)';
   }
+  return kIsWeb
+      ? 'Prepared $fileName (report text copied to clipboard)'
+      : 'Copied $fileName summary to clipboard';
 }
+
 
 
 class TesterActivityReportScreen extends StatefulWidget {
