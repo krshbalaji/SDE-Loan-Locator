@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../services/activity_telemetry_service.dart';
 
 import '../../engines/delinquency_engine.dart';
 import '../../models/borrower_model.dart';
@@ -116,6 +117,7 @@ class _CollectionsQueueScreenState extends State<CollectionsQueueScreen> {
               onPressed: () async {
                 final amount = double.tryParse(amountCtrl.text) ?? 0;
                 if (amount <= 0) return;
+                final telemetry = context.read<ActivityTelemetryService>();
                 final loc = await LocationService.getCurrentLocation();
                 await portfolio.recordPayment(
                   loanId: loan.loanId,
@@ -125,6 +127,10 @@ class _CollectionsQueueScreenState extends State<CollectionsQueueScreen> {
                   collectedByUid: uid,
                   geoLat: loc.latitude,
                   geoLng: loc.longitude,
+                );
+                telemetry.logFeatureReviewed(
+                  'Recorded Queue Payment',
+                  detail: 'Loan ${loan.loanId} • ${IndianFormatters.formatInr(amount)} (${mode.name})',
                 );
                 if (ctx.mounted) Navigator.pop(ctx);
                 if (context.mounted) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
+import '../../services/activity_telemetry_service.dart';
 
 import '../../engines/geo_filter_engine.dart';
 import '../../models/collection_log_model.dart';
@@ -46,6 +47,10 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
 
   Future<void> _refreshLocation() async {
     final loc = await LocationService.getCurrentLocation();
+    telemetry.logFeatureReviewed(
+      'Stamped Field GPS Check-In',
+      detail: 'Loan ${pin.primaryLoan.loanId} (${pin.borrower.fullName}) • ${check.distanceMeters.toStringAsFixed(0)}m • Verified: ${check.isVerified}',
+    );
     if (!mounted) return;
     setState(() {
       _originLat = loc.latitude;
@@ -69,6 +74,7 @@ class _FieldLocatorMapScreenState extends State<FieldLocatorMapScreen> {
     AuthService auth,
     GeoBorrowerPin pin,
   ) async {
+    final telemetry = context.read<ActivityTelemetryService>();
     final loc = await LocationService.getCurrentLocation();
     final check = GeoFilterEngine.verifyCheckInProximity(
       agentLat: loc.latitude,
