@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
+import 'activity_telemetry_service.dart';
 import 'audit_service.dart';
 
 import '../models/borrower_model.dart';
@@ -15,6 +16,7 @@ class AuthService extends ChangeNotifier {
 
   final bool useFirebase;
   final AuditService? _auditService;
+  ActivityTelemetryService? _telemetryService;
 
   AppUser? _currentUser;
   List<AppUser> _staffDirectory = [];
@@ -616,11 +618,19 @@ class AuthService extends ChangeNotifier {
     return resolved;
   }
 
+  void attachTelemetry(ActivityTelemetryService telemetry) {
+    _telemetryService = telemetry;
+  }
+
   Future<void> signOut() async {
+    if (_telemetryService != null) {
+      await _telemetryService!.endSession();
+    }
     if (useFirebase) {
       await FirebaseAuth.instance.signOut();
     }
     _currentUser = null;
+    _isDemoSession = false;
     _errorMessage = null;
     notifyListeners();
   }

@@ -138,7 +138,8 @@ class _LoginScreenState extends State<LoginScreen> {
       startedAt: startedAt,
     );
 
-    await portfolio.switchToDemoSandbox();
+    auth.attachTelemetry(telemetry);
+        await portfolio.switchToDemoSandbox();
     auth.signInAsDemoUser(user);
     telemetry.logFeatureReviewed(
       'Entered Demo Sandbox',
