@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/user_model.dart';
+import 'demo_alert_service.dart';
+import 'location_service.dart';
 
 class ActivityEventRecord {
   final DateTime timestamp;
@@ -154,6 +156,22 @@ class ActivityTelemetryService extends ChangeNotifier
 
   final List<TesterSessionRecord> _sessions = <TesterSessionRecord>[];
   TesterSessionRecord? _activeSession;
+  String? _demoTesterName;
+  String? _demoRoleLabel;
+  GeoPointResult? _demoStartGeo;
+  DateTime? _demoStartedAt;
+
+  void setDemoTesterContext({
+    required String testerName,
+    required String demoRoleLabel,
+    required GeoPointResult startGeo,
+    required DateTime startedAt,
+  }) {
+    _demoTesterName = testerName;
+    _demoRoleLabel = demoRoleLabel;
+    _demoStartGeo = startGeo;
+    _demoStartedAt = startedAt;
+  }
   Timer? _heartbeatTimer;
   DateTime? _lastTickAt;
   bool _isForeground = true;

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/activity_telemetry_service.dart';
+import '../../services/demo_alert_service.dart';
 
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
@@ -47,8 +49,23 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _openDemoRolePasswordDialog(AppUser user) async {
+    final nameCtrl = TextEditingController();
     final passCtrl = TextEditingController(text: _demoAccessPasscode);
     String? errorText;
+
+    void submitDialog(BuildContext ctx, void Function(void Function()) setDialogState) {
+      final tester = nameCtrl.text.trim();
+      if (tester.isEmpty) {
+        setDialogState(() => errorText = 'Please enter your name to start demo');
+        return;
+      }
+      if (passCtrl.text != _demoAccessPasscode) {
+        setDialogState(() => errorText = 'Invalid demo password');
+        return;
+      }
+      Navigator.pop(ctx, true);
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -59,10 +76,21 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Dedicated sandbox profile: ${user.displayName}\n${user.email} • ${user.branch}',
+                'Dedicated sandbox: ${user.displayName}\n${user.email} • ${user.branch}\nLocation will be captured automatically on launch.',
                 style: const TextStyle(fontSize: 12),
               ),
               const SizedBox(height: 12),
+              TextField(
+                controller: nameCtrl,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Your Name (Required)',
+                  hintText: 'e.g., Suresh Kumar',
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (_) => submitDialog(ctx, setDialogState),
+              ),
+              const SizedBox(height: 10),
               TextField(
                 controller: passCtrl,
                 obscureText: true,
@@ -71,13 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   border: const OutlineInputBorder(),
                   errorText: errorText,
                 ),
-                onSubmitted: (_) {
-                  if (passCtrl.text == _demoAccessPasscode) {
-                    Navigator.pop(ctx, true);
-                  } else {
-                    setDialogState(() => errorText = 'Invalid demo password');
-                  }
-                },
+                onSubmitted: (_) => submitDialog(ctx, setDialogState),
               ),
             ],
           ),
@@ -87,31 +109,51 @@ class _LoginScreenState extends State<LoginScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () {
-                if (passCtrl.text == _demoAccessPasscode) {
-                  Navigator.pop(ctx, true);
-                } else {
-                  setDialogState(() => errorText = 'Invalid demo password');
-                }
-              },
+              onPressed: () => submitDialog(ctx, setDialogState),
               child: const Text('Launch Demo'),
             ),
           ],
         ),
       ),
     );
+
+    final testerName = nameCtrl.text.trim();
+    nameCtrl.dispose();
     passCtrl.dispose();
     if (confirmed != true || !mounted) return;
 
+    final startedAt = DateTime.now();
+    final geo = await DemoAlertService.captureStartGeo();
+    if (!mounted) return;
+
+    final roleLabel = _demoRoleLabel(user);
     final portfolio = context.read<LoanPortfolioProvider>();
     final auth = context.read<AuthService>();
     final telemetry = context.read<ActivityTelemetryService>();
+
+    telemetry.setDemoTesterContext(
+      testerName: testerName,
+      demoRoleLabel: roleLabel,
+      startGeo: geo,
+      startedAt: startedAt,
+    );
+
     await portfolio.switchToDemoSandbox();
+    auth.signInAsDemoUser(user);
     telemetry.logFeatureReviewed(
       'Entered Demo Sandbox',
-      detail: '${_demoRoleLabel(user)} (${user.role.wireValue})',
+      detail: '$testerName • $roleLabel • ${DemoAlertService.formatGeoLabel(geo)}',
     );
-    auth.signInAsDemoUser(user);
+
+    unawaited(
+      DemoAlertService.sendInitiationAlert(
+        testerName: testerName,
+        demoRoleLabel: roleLabel,
+        roleUser: user,
+        startedAt: startedAt,
+        geo: geo,
+      ),
+    );
   }
 
   Future<void> _handleLogin() async {
