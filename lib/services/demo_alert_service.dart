@@ -13,7 +13,11 @@ import '_demo_alert_sender_stub.dart'
 class DemoAlertService {
   DemoAlertService._();
 
-  // Configure via --dart-define=TELEGRAM_BOT_TOKEN=... and --dart-define=TELEGRAM_CHAT_ID=...
+  // Configure via --dart-define=TELEGRAM_RELAY_URL=... (recommended) or direct token/chat ID
+  static const String _relayUrl = String.fromEnvironment(
+    'TELEGRAM_RELAY_URL',
+    defaultValue: '',
+  );
   static const String _botToken = String.fromEnvironment(
     'TELEGRAM_BOT_TOKEN',
     defaultValue: '',
@@ -23,8 +27,11 @@ class DemoAlertService {
     defaultValue: '',
   );
 
-  static bool get isConfigured =>
+  static bool get _hasRelay => _relayUrl.trim().isNotEmpty;
+  static bool get _hasDirectBot =>
       _botToken.trim().isNotEmpty && _chatId.trim().isNotEmpty;
+
+  static bool get isConfigured => _hasRelay || _hasDirectBot;
 
   static Future<GeoPointResult> captureStartGeo() async {
     try {
@@ -131,18 +138,29 @@ class DemoAlertService {
   static Future<void> _sendTelegramMessage(String markdownText) async {
     if (!isConfigured) {
       debugPrint(
-        'DemoAlertService skipped: set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID via --dart-define.',
+        'DemoAlertService skipped: set TELEGRAM_RELAY_URL (or TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID) via --dart-define.',
       );
       return;
     }
 
-    final endpoint = 'https://api.telegram.org/bot$_botToken/sendMessage';
-    final payload = jsonEncode(<String, dynamic>{
-      'chat_id': _chatId,
-      'text': markdownText,
-      'parse_mode': 'Markdown',
-      'disable_web_page_preview': false,
-    });
+    final String endpoint;
+    final String payload;
+    if (_hasRelay) {
+      endpoint = _relayUrl.trim();
+      payload = jsonEncode(<String, dynamic>{
+        'text': markdownText,
+        'parse_mode': 'Markdown',
+        'disable_web_page_preview': false,
+      });
+    } else {
+      endpoint = 'https://api.telegram.org/bot${_botToken.trim()}/sendMessage';
+      payload = jsonEncode(<String, dynamic>{
+        'chat_id': _chatId.trim(),
+        'text': markdownText,
+        'parse_mode': 'Markdown',
+        'disable_web_page_preview': false,
+      });
+    }
 
     try {
       if (kIsWeb) {
