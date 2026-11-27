@@ -168,12 +168,30 @@ class DemoAlertService {
       } else if (!Platform.environment.containsKey('FLUTTER_TEST')) {
         final client = HttpClient();
         try {
-          final request = await client.postUrl(Uri.parse(endpoint));
-          request.headers.contentType =
-              ContentType('application', 'json', charset: 'utf-8');
-          request.write(payload);
-          final response = await request.close().timeout(const Duration(seconds: 8));
-          await response.drain<void>();
+          var currentUri = Uri.parse(endpoint);
+          for (var hop = 0; hop < 4; hop++) {
+            final request = await client.postUrl(currentUri);
+            request.followRedirects = false;
+            request.headers.contentType =
+                ContentType('application', 'json', charset: 'utf-8');
+            request.write(payload);
+            final response =
+                await request.close().timeout(const Duration(seconds: 8));
+            await response.drain<void>();
+            if (response.statusCode >= 300 && response.statusCode < 400) {
+              final loc = response.headers.value('location');
+              if (loc != null && loc.isNotEmpty) {
+                currentUri = currentUri.resolve(loc);
+                continue;
+              }
+            }
+            if (response.statusCode < 200 || response.statusCode >= 300) {
+              debugPrint(
+                'DemoAlertService HTTP status: ${response.statusCode} on $currentUri',
+              );
+            }
+            break;
+          }
         } finally {
           client.close(force: true);
         }
