@@ -68,7 +68,7 @@ service cloud.firestore {
     }
 
     match /app_config/{docId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isExecutive();
     }
 
