@@ -169,25 +169,35 @@ class DemoAlertService {
         final client = HttpClient();
         try {
           var currentUri = Uri.parse(endpoint);
-          for (var hop = 0; hop < 4; hop++) {
-            final request = await client.postUrl(currentUri);
+          var useGet = false;
+          for (var hop = 0; hop < 5; hop++) {
+            final request = useGet
+                ? await client.getUrl(currentUri)
+                : await client.postUrl(currentUri);
             request.followRedirects = false;
-            request.headers.contentType =
-                ContentType('application', 'json', charset: 'utf-8');
-            request.write(payload);
+            if (!useGet) {
+              request.headers.contentType =
+                  ContentType('application', 'json', charset: 'utf-8');
+              request.write(payload);
+            }
             final response =
-                await request.close().timeout(const Duration(seconds: 8));
-            await response.drain<void>();
+                await request.close().timeout(const Duration(seconds: 10));
+            final bodyText = await response.transform(utf8.decoder).join();
             if (response.statusCode >= 300 && response.statusCode < 400) {
               final loc = response.headers.value('location');
               if (loc != null && loc.isNotEmpty) {
                 currentUri = currentUri.resolve(loc);
+                if (response.statusCode == 301 ||
+                    response.statusCode == 302 ||
+                    response.statusCode == 303) {
+                  useGet = true;
+                }
                 continue;
               }
             }
             if (response.statusCode < 200 || response.statusCode >= 300) {
               debugPrint(
-                'DemoAlertService HTTP status: ${response.statusCode} on $currentUri',
+                'DemoAlertService HTTP ${response.statusCode}: $bodyText',
               );
             }
             break;
