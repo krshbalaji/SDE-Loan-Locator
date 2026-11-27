@@ -146,10 +146,7 @@ class DemoAlertService {
 
     try {
       if (kIsWeb) {
-        final req = web.XMLHttpRequest();
-        req.open('POST', endpoint);
-        req.setRequestHeader('Content-Type', 'application/json');
-        req.send(payload.toJS);
+        await sendWebRelayPost(endpoint, payload);
       } else if (!Platform.environment.containsKey('FLUTTER_TEST')) {
         final client = HttpClient();
         try {

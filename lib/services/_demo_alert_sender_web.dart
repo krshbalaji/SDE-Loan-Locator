@@ -9,14 +9,26 @@ Future<void> sendWebRelayPost(String endpoint, String payload) async {
   final req = web.XMLHttpRequest();
   req.open('POST', endpoint);
   req.setRequestHeader('Content-Type', 'text/plain;charset=UTF-8');
-  req.onLoadEnd.listen((_) {
-    debugPrint('DemoAlertService Web HTTP ${req.status}: ${req.responseText}');
+
+  void finish(String statusLabel) {
+    debugPrint('$statusLabel: HTTP ${req.status}');
     if (!completer.isCompleted) completer.complete();
-  });
-  req.onError.listen((_) {
-    debugPrint('DemoAlertService Web XHR network/CORS error');
-    if (!completer.isCompleted) completer.complete();
-  });
+  }
+
+  req.addEventListener(
+    'loadend',
+    ((web.Event _) => finish('DemoAlertService Web loadend')).toJS,
+  );
+  req.addEventListener(
+    'error',
+    ((web.Event _) => finish('DemoAlertService Web XHR/CORS error')).toJS,
+  );
+
   req.send(payload.toJS);
-  await completer.future.timeout(const Duration(seconds: 8), onTimeout: () {});
+  await completer.future.timeout(
+    const Duration(seconds: 8),
+    onTimeout: () {
+      if (!completer.isCompleted) completer.complete();
+    },
+  );
 }
