@@ -118,11 +118,11 @@ class _AuthGateState extends State<_AuthGate> {
 
     if (sessionKey != _lastSessionKey) {
       _lastSessionKey = sessionKey;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
         final telemetry = context.read<ActivityTelemetryService>();
         if (user == null) {
-          telemetry.endSession();
+          await telemetry.endSession();
           return;
         }
         telemetry.startSession(user, isDemoSession: auth.isDemoSession);

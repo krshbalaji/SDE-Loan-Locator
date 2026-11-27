@@ -327,16 +327,16 @@ class ActivityTelemetryService extends ChangeNotifier
       _demoStartGeo = null;
       _demoStartedAt = null;
 
-      unawaited(
-        DemoAlertService.sendCompletionReport(
+      try {
+        await DemoAlertService.sendCompletionReport(
           testerName: testerName,
           demoRoleLabel: roleLabel,
           startedAt: startedAt,
           endedAt: endedAt,
           startGeo: startGeo,
           eventLines: formattedEvents,
-        ),
-      );
+        ).timeout(const Duration(seconds: 6));
+      } catch (_) {}
     }
     _flushElapsedTime(persistRemote: false);
     final now = DateTime.now();
@@ -372,6 +372,7 @@ class ActivityTelemetryService extends ChangeNotifier
       ),
     );
     notifyListeners();
+    unawaited(_pushSessionToFirestore(session));
   }
 
   void logFeatureReviewed(String label, {String? detail}) {
