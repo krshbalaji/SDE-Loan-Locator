@@ -1,14 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show ContentType, HttpClient, Platform;
-import 'dart:js_interop';
 
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
-import 'package:web/web.dart' as web;
 
 import '../models/user_model.dart';
 import 'location_service.dart';
+import '_demo_alert_sender_stub.dart'
+    if (dart.library.js_interop) '_demo_alert_sender_web.dart';
 
 class DemoAlertService {
   DemoAlertService._();
