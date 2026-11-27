@@ -40,6 +40,8 @@ class ApkUpdateOutcome {
 }
 
 class AppUpdateService extends ChangeNotifier {
+  static const String defaultReleaseApkUrl =
+      'https://github.com/krshbalaji/SDE-Loan-Locator/releases/latest/download/SDE-Loan-Locator.apk';
   static const int currentBuildNumber = 1;
   static const String currentVersionName = '1.0.0+1';
 
@@ -120,9 +122,14 @@ class AppUpdateService extends ChangeNotifier {
       );
     }
 
+    final manifestUrl = _latestManifest?.apkUrl.trim() ?? '';
+    final effectiveManifestUrl =
+        (manifestUrl.isEmpty || manifestUrl == 'https://sde-loan-locator.web.app/sde-loan-locator.apk')
+            ? defaultReleaseApkUrl
+            : manifestUrl;
     final rawUrl = (overrideApkUrl != null && overrideApkUrl.trim().isNotEmpty)
         ? overrideApkUrl.trim()
-        : (_latestManifest?.apkUrl ?? 'https://sde-loan-locator.web.app/sde-loan-locator.apk');
+        : effectiveManifestUrl;
     final uri = Uri.tryParse(rawUrl);
     if (uri == null || !(uri.scheme == 'https' || uri.scheme == 'http')) {
       return const ApkUpdateOutcome(
