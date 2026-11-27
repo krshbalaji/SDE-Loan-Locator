@@ -12,19 +12,23 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.32.7'
           channel: 'stable'
           cache: true
+
       - name: Cache Gradle packages & wrapper
         uses: actions/cache@v4
         with:
@@ -34,22 +38,28 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle-wrapper.properties') }}
           restore-keys: |
             gradle-${{ runner.os }}-
+
       - name: Install dependencies
         run: flutter pub get
+
       - name: Analyze & Run Unit Tests
         run: |
           flutter analyze
           flutter test
+
       - name: Build Release APK
         run: flutter build apk --release --dart-define=TELEGRAM_RELAY_URL="${{ secrets.TELEGRAM_RELAY_URL }}" --dart-define=TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}" --dart-define=TELEGRAM_CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
+
       - name: Prepare Direct APK Binary
         run: cp build/app/outputs/flutter-apk/app-release.apk SDE-Loan-Locator.apk
+
       - name: Upload SDE-Loan-Locator APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SDE-Loan-Locator-release-apk
           path: SDE-Loan-Locator.apk
           retention-days: 30
+
       - name: Publish Direct APK to GitHub Release (latest)
         uses: softprops/action-gh-release@v2
         with:
@@ -57,8 +67,10 @@ jobs:
           name: SDE Loan Locator Latest Build
           files: SDE-Loan-Locator.apk
           make_latest: true
+
       - name: Build Flutter Web App
         run: flutter build web --release --no-tree-shake-icons --dart-define=TELEGRAM_RELAY_URL="${{ secrets.TELEGRAM_RELAY_URL }}" --dart-define=TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}" --dart-define=TELEGRAM_CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
+
       - name: Upload SDE-Loan-Locator Web App Artifact
         uses: actions/upload-artifact@v4
         with:
