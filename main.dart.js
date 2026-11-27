@@ -37885,10 +37885,12 @@ return A.bI(s,"`","\\`")},
 a_V(a){var s=0,r=A.y(t.H),q,p=2,o=[],n,m,l,k,j,i
 var $async$a_V=A.z(function(b,c){if(b===1){o.push(c)
 s=p}for(;;)switch(s){case 0:j=B.m.a3("")
-if(j.length===0){A.bof().$1("DemoAlertService skipped: set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID via --dart-define.")
+if(j.length===0){A.bof().$1("DemoAlertService skipped: set TELEGRAM_RELAY_URL (or TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID) via --dart-define.")
 s=1
-break}n="https://api.telegram.org/bot/sendMessage"
-m=B.dG.adX(A.a1(["chat_id","","text",a,"parse_mode","Markdown","disable_web_page_preview",!1],t.N,t.z),null)
+break}n=null
+m=null
+n=j
+m=B.dG.adX(A.a1(["text",a,"parse_mode","Markdown","disable_web_page_preview",!1],t.N,t.z),null)
 p=4
 s=7
 return A.r(A.biO(n,m),$async$a_V)
