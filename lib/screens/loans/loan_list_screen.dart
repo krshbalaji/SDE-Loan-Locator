@@ -462,14 +462,16 @@ class _LoanListScreenState extends State<LoanListScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  borrower?.fullName ?? loan.borrowerId,
+                                  (byName[(borrower?.fullName ?? loan.borrowerId).trim().toLowerCase()] ?? 1) > 1
+                                      ? '${borrower?.fullName ?? loan.borrowerId} (${loan.borrowerId})'
+                                      : (borrower?.fullName ?? loan.borrowerId),
                                   maxLines: 1,
                                   softWrap: false,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(fontWeight: FontWeight.bold),
                                 ),
                               ),
-                              if ((byBorrower[loan.borrowerId] ?? 1) > 1 || (byName[(borrower?.fullName ?? loan.borrowerId).trim().toLowerCase()] ?? 1) > 1) ...[
+                              if ((byBorrower[loan.borrowerId] ?? 1) > 1) ...[
                                 const SizedBox(width: 6),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -478,8 +480,21 @@ class _LoanListScreenState extends State<LoanListScreen> {
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
-                                    '${byBorrower[loan.borrowerId] ?? byName[(borrower?.fullName ?? loan.borrowerId).trim().toLowerCase()]} Loans',
+                                    '${byBorrower[loan.borrowerId]} Loans',
                                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.indigo.shade800),
+                                  ),
+                                ),
+                              ] else if ((byName[(borrower?.fullName ?? loan.borrowerId).trim().toLowerCase()] ?? 1) > 1) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.shade50,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '${byName[(borrower?.fullName ?? loan.borrowerId).trim().toLowerCase()]} Same Name',
+                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.amber.shade900),
                                   ),
                                 ),
                               ],

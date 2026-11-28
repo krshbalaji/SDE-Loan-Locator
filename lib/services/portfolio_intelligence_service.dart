@@ -30,11 +30,9 @@ class FunnelConversionSummary {
   double get loginToDisbursedCountPct =>
       loggedCount == 0 ? 0.0 : (disbursedCount / loggedCount) * 100.0;
 
-  int get activeEligibleCount =>
-      (loggedCount - closedOrRejectedCount) > 0 ? (loggedCount - closedOrRejectedCount) : loggedCount;
+  int get activeEligibleCount => loggedCount;
 
-  double get eligibleToDisbursedCountPct =>
-      activeEligibleCount == 0 ? 0.0 : (disbursedCount / activeEligibleCount) * 100.0;
+  double get eligibleToDisbursedCountPct => loggedCount == 0 ? 0.0 : (disbursedCount / loggedCount) * 100.0;
 
   double get sanctionToDisbursedAmountPct =>
       sanctionedAmount == 0 ? 0.0 : (disbursedAmount / sanctionedAmount) * 100.0;
