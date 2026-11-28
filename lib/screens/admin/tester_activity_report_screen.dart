@@ -31,9 +31,16 @@ enum _DatePreset { all, today, last7Days, custom }
 
 class _TesterActivityReportScreenState
     extends State<TesterActivityReportScreen> {
+  final TextEditingController _searchCtrl = TextEditingController();
   _DatePreset _preset = _DatePreset.all;
   DateTime? _fromDate;
   DateTime? _toDate;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -45,6 +52,16 @@ class _TesterActivityReportScreenState
   }
 
   DateTime _dayOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
+
+  bool _matchesSearch(TesterSessionRecord session) {
+    final q = _searchCtrl.text.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return session.email.toLowerCase().contains(q) ||
+        session.roleLabel.toLowerCase().contains(q) ||
+        session.platform.toLowerCase().contains(q) ||
+        session.screensVisited.any((sc) => sc.toLowerCase().contains(q)) ||
+        session.itemsReviewed.any((it) => it.toLowerCase().contains(q));
+  }
 
   bool _matchesRange(TesterSessionRecord session) {
     final refDay = _dayOnly(session.lastActiveAt);
@@ -182,7 +199,9 @@ class _TesterActivityReportScreenState
     final telemetry = context.watch<ActivityTelemetryService>();
     final isSuperAdmin = auth.currentUser?.isExecutive == true;
     final allSessions = telemetry.sessions;
-    final filteredSessions = allSessions.where(_matchesRange).toList();
+    final filteredSessions = allSessions
+        .where((session) => _matchesRange(session) && _matchesSearch(session))
+        .toList();
     final slug = _rangeSlug();
 
     final totalSeconds = filteredSessions.fold<int>(
