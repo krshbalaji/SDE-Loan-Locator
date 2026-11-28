@@ -80,6 +80,61 @@ class AgentPerformance {
   final int par30Count;
 }
 
+
+enum SevenTierDpdBucket {
+  dpd0('0 DPD', 1),
+  lt30('< 30 DPD', 2),
+  lt60('< 60 DPD', 3),
+  lt90('< 90 DPD', 4),
+  lt180('< 180 DPD', 5),
+  lt365('< 365 DPD', 6),
+  gt365('> 365 DPD', 7);
+
+  const SevenTierDpdBucket(this.label, this.order);
+  final String label;
+  final int order;
+
+  static SevenTierDpdBucket fromDpd(int dpd) {
+    if (dpd <= 0) return SevenTierDpdBucket.dpd0;
+    if (dpd < 30) return SevenTierDpdBucket.lt30;
+    if (dpd < 60) return SevenTierDpdBucket.lt60;
+    if (dpd < 90) return SevenTierDpdBucket.lt90;
+    if (dpd < 180) return SevenTierDpdBucket.lt180;
+    if (dpd < 365) return SevenTierDpdBucket.lt365;
+    return SevenTierDpdBucket.gt365;
+  }
+}
+
+class SevenTierDpdStat {
+  const SevenTierDpdStat({
+    required this.bucket,
+    required this.loanCount,
+    required this.posAmount,
+  });
+
+  final SevenTierDpdBucket bucket;
+  final int loanCount;
+  final double posAmount;
+}
+
+class PeriodTrendPoint {
+  const PeriodTrendPoint({
+    required this.periodKey,
+    required this.periodLabel,
+    required this.loginCount,
+    required this.disbursedCount,
+    required this.disbursedAmount,
+    required this.posAmount,
+  });
+
+  final String periodKey;
+  final String periodLabel;
+  final int loginCount;
+  final int disbursedCount;
+  final double disbursedAmount;
+  final double posAmount;
+}
+
 class PortfolioKpiSummary {
   const PortfolioKpiSummary({
     required this.totalDeployedCapital,
@@ -96,6 +151,24 @@ class PortfolioKpiSummary {
     required this.earlyWarningCount,
     required this.agingBreakdown,
     required this.agentLeaderboard,
+    this.weightedRoiPercent = 0.0,
+    this.stdPrincipalOutstanding = 0.0,
+    this.nonStdPrincipalOutstanding = 0.0,
+    this.avgLtvPct = 0.0,
+    this.avgFoirPct = 0.0,
+    this.disbursedLoansCount = 0,
+    this.closedOrForeclosedCount = 0,
+    this.periodDisbursedCount = 0,
+    this.periodDisbursedAmount = 0.0,
+    this.periodLoginToDisbursalRatioPct = 0.0,
+    this.currentCollectionEfficiencyPct = 0.0,
+    this.overallCollectionEfficiencyPct = 0.0,
+    this.emiPaidFullCount = 0,
+    this.emiPartPaidCount = 0,
+    this.emiNotPaidCount = 0,
+    this.emiNoDuesCount = 0,
+    this.sevenTierDpdBreakdown = const {},
+    this.periodTrends = const [],
   });
 
   final double totalDeployedCapital;
@@ -112,6 +185,24 @@ class PortfolioKpiSummary {
   final int earlyWarningCount;
   final Map<AgingBucket, AgingBucketStat> agingBreakdown;
   final List<AgentPerformance> agentLeaderboard;
+  final double weightedRoiPercent;
+  final double stdPrincipalOutstanding;
+  final double nonStdPrincipalOutstanding;
+  final double avgLtvPct;
+  final double avgFoirPct;
+  final int disbursedLoansCount;
+  final int closedOrForeclosedCount;
+  final int periodDisbursedCount;
+  final double periodDisbursedAmount;
+  final double periodLoginToDisbursalRatioPct;
+  final double currentCollectionEfficiencyPct;
+  final double overallCollectionEfficiencyPct;
+  final int emiPaidFullCount;
+  final int emiPartPaidCount;
+  final int emiNotPaidCount;
+  final int emiNoDuesCount;
+  final Map<SevenTierDpdBucket, SevenTierDpdStat> sevenTierDpdBreakdown;
+  final List<PeriodTrendPoint> periodTrends;
 }
 
 /// Pure Dart DPD, Aging Bucket, Waterfall Payment Allocation, Early Warning & PAR Engine.
@@ -588,6 +679,175 @@ class DelinquencyEngine {
       earlyWarningCount: earlyWarningCount,
       agingBreakdown: agingMap,
       agentLeaderboard: leaderboard,
+      weightedRoiPercent: totalPrincipalOut > 0
+          ? IndianFormatters.roundPaise(
+              activeLoans.fold<double>(
+                    0.0,
+                    (sum, l) => sum + (l.principalOutstanding * l.interestRateAnnual),
+                  ) /
+                  totalPrincipalOut,
+            )
+          : 0.0,
+      stdPrincipalOutstanding: IndianFormatters.roundPaise(
+        activeLoans
+            .where((l) => l.dpd < 90)
+            .fold<double>(0.0, (sum, l) => sum + l.principalOutstanding),
+      ),
+      nonStdPrincipalOutstanding: IndianFormatters.roundPaise(
+        activeLoans
+            .where((l) => l.dpd >= 90)
+            .fold<double>(0.0, (sum, l) => sum + l.principalOutstanding),
+      ),
+      avgLtvPct: activeLoans.where((l) => l.ltvPct != null).isNotEmpty
+          ? IndianFormatters.roundPaise(
+              activeLoans
+                      .where((l) => l.ltvPct != null)
+                      .fold<double>(0.0, (sum, l) => sum + l.ltvPct!) /
+                  activeLoans.where((l) => l.ltvPct != null).length,
+            )
+          : 0.0,
+      avgFoirPct: activeLoans.where((l) => l.foirPct != null).isNotEmpty
+          ? IndianFormatters.roundPaise(
+              activeLoans
+                      .where((l) => l.foirPct != null)
+                      .fold<double>(0.0, (sum, l) => sum + l.foirPct!) /
+                  activeLoans.where((l) => l.foirPct != null).length,
+            )
+          : 0.0,
+      disbursedLoansCount: loans
+          .where((l) =>
+              l.netDisbursedAmount > 0 ||
+              l.status != LoanStatus.pendingApproval)
+          .length,
+      closedOrForeclosedCount: loans
+          .where((l) =>
+              l.status == LoanStatus.closed ||
+              l.status == LoanStatus.writtenOff)
+          .length,
+      periodDisbursedCount: loans
+          .where((l) =>
+              (l.netDisbursedAmount > 0 ||
+                  l.status != LoanStatus.pendingApproval) &&
+              !l.disbursementDate.isBefore(startOfMonth))
+          .length,
+      periodDisbursedAmount: IndianFormatters.roundPaise(
+        loans
+            .where((l) =>
+                (l.netDisbursedAmount > 0 ||
+                    l.status != LoanStatus.pendingApproval) &&
+                !l.disbursementDate.isBefore(startOfMonth))
+            .fold<double>(0.0, (sum, l) => sum + l.netDisbursedAmount),
+      ),
+      periodLoginToDisbursalRatioPct: loans.isNotEmpty
+          ? IndianFormatters.roundPaise(
+              (loans
+                          .where((l) =>
+                              (l.netDisbursedAmount > 0 ||
+                                  l.status != LoanStatus.pendingApproval) &&
+                              !l.disbursementDate.isBefore(startOfMonth))
+                          .length /
+                      loans.length) *
+                  100,
+            )
+          : 0.0,
+      currentCollectionEfficiencyPct: activeLoans
+              .fold<double>(0.0, (sum, l) => sum + l.emiAmount) >
+          0
+          ? IndianFormatters.roundPaise(
+              min(
+                150.0,
+                (max(0.0, collectedMtd) /
+                        activeLoans.fold<double>(
+                            0.0, (sum, l) => sum + l.emiAmount)) *
+                    100,
+              ),
+            )
+          : 0.0,
+      overallCollectionEfficiencyPct: totalDeployed > 0
+          ? IndianFormatters.roundPaise(
+              min(
+                150.0,
+                (max(0.0, collectedYtd) / totalDeployed) * 100,
+              ),
+            )
+          : 0.0,
+      emiPaidFullCount: activeLoans
+          .where((l) =>
+              l.emiAmount > 0 &&
+              max(0.0, collectedMtd) >= l.emiAmount)
+          .length,
+      emiPartPaidCount: activeLoans
+          .where((l) =>
+              l.emiAmount > 0 &&
+              max(0.0, collectedMtd) > 0 &&
+              max(0.0, collectedMtd) < l.emiAmount)
+          .length,
+      emiNotPaidCount: activeLoans
+          .where((l) =>
+              l.emiAmount > 0 && max(0.0, collectedMtd) <= 0)
+          .length,
+      emiNoDuesCount: activeLoans
+          .where((l) => l.emiAmount <= 0 || l.totalOutstanding <= 0)
+          .length,
+      sevenTierDpdBreakdown: () {
+        final map = <SevenTierDpdBucket, SevenTierDpdStat>{
+          for (final b in SevenTierDpdBucket.values)
+            b: SevenTierDpdStat(bucket: b, loanCount: 0, posAmount: 0.0),
+        };
+        for (final l in activeLoans) {
+          final bucket = SevenTierDpdBucket.fromDpd(l.dpd);
+          final prev = map[bucket]!;
+          map[bucket] = SevenTierDpdStat(
+            bucket: bucket,
+            loanCount: prev.loanCount + 1,
+            posAmount: IndianFormatters.roundPaise(
+              prev.posAmount + l.principalOutstanding,
+            ),
+          );
+        }
+        return map;
+      }(),
+      periodTrends: () {
+        final byMonth = <String, List<LoanModel>>{};
+        for (final l in loans) {
+          final d = l.disbursementDate;
+          final key = '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}';
+          (byMonth[key] ??= <LoanModel>[]).add(l);
+        }
+        final keys = byMonth.keys.toList()..sort();
+        final recentKeys = keys.length > 6 ? keys.sublist(keys.length - 6) : keys;
+        return [
+          for (final k in recentKeys)
+            () {
+              final list = byMonth[k]!;
+              final parts = k.split('-');
+              final yr = int.tryParse(parts[0]) ?? 2026;
+              final mo = int.tryParse(parts[1]) ?? 1;
+              const months = [
+                'Jan','Feb','Mar','Apr','May','Jun',
+                'Jul','Aug','Sep','Oct','Nov','Dec'
+              ];
+              final label = '${months[(mo - 1).clamp(0, 11)]} ${yr.toString().substring(2)}';
+              final disbList = list
+                  .where((x) =>
+                      x.netDisbursedAmount > 0 ||
+                      x.status != LoanStatus.pendingApproval)
+                  .toList();
+              return PeriodTrendPoint(
+                periodKey: k,
+                periodLabel: label,
+                loginCount: list.length,
+                disbursedCount: disbList.length,
+                disbursedAmount: IndianFormatters.roundPaise(
+                  disbList.fold<double>(0.0, (s, x) => s + x.netDisbursedAmount),
+                ),
+                posAmount: IndianFormatters.roundPaise(
+                  list.fold<double>(0.0, (s, x) => s + x.principalOutstanding),
+                ),
+              );
+            }(),
+        ];
+      }(),
     );
   }
 }

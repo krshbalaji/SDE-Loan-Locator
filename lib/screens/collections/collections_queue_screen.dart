@@ -34,6 +34,8 @@ class _CollectionsQueueScreenState extends State<CollectionsQueueScreen> {
   String _search = '';
   SearchFieldScope _searchScope = SearchFieldScope.all;
   CollectionCategory? _categoryFilter;
+  // ignore: prefer_final_fields
+  bool _zeroPaidOrStaleFilter = false;
 
   @override
   void initState() {
@@ -167,6 +169,14 @@ class _CollectionsQueueScreenState extends State<CollectionsQueueScreen> {
       if (_categoryFilter != null &&
           CollectionCategory.fromLoan(loan) != _categoryFilter) {
         return false;
+      }
+      if (_zeroPaidOrStaleFilter) {
+        final daysSincePaid = loan.lastPaidDate == null
+            ? 999
+            : DateTime.now().difference(loan.lastPaidDate!).inDays;
+        if (!loan.isPortfolioActive || daysSincePaid < 30) {
+          return false;
+        }
       }
       final b = portfolio.borrowerById(loan.borrowerId);
       return OmniSearchEngine.matches(

@@ -1,3 +1,5 @@
+import 'package:loan_locator_app/widgets/dashboard_time_slicer.dart';
+import 'package:loan_locator_app/models/user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -37,6 +39,7 @@ class MasterDashboard extends StatefulWidget {
 }
 
 class _MasterDashboardState extends State<MasterDashboard> {
+  final DashboardTimeSlicerController _timeSlicerCtrl = DashboardTimeSlicerController();
   final AppUpdateService _updateService = AppUpdateService();
   int _selectedIndex = 0;
   double _conveyanceRatePerKm = ConveyanceEngine.defaultRatePerKmInr;
@@ -320,7 +323,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
       appBar: AppBar(
         title: Text(titles[_selectedIndex]),
         actions: [
-          if ((user.isSuperAdmin) || (user.isExecutive))
+          if (user.hasFeature(AppFeature.testerActivityReport))
             IconButton(
               tooltip: 'Tester & User Activity Report',
               icon: const Icon(Icons.fact_check_outlined),
@@ -459,13 +462,14 @@ class _MasterDashboardState extends State<MasterDashboard> {
     AuthService auth,
   ) {
     final now = DateTime.now();
+        final sliceRange = _timeSlicerCtrl.resolveRange(now);
     final conveyanceList = ConveyanceEngine.computePeriodConveyance(
       logs: portfolio.collectionLogs,
       transactions: portfolio.transactions,
       borrowers: portfolio.borrowers,
       agentNames: auth.knownAgentNames,
-      fromDate: DateTime(now.year, now.month, 1),
-      toDate: now,
+      fromDate: sliceRange.start,
+      toDate: sliceRange.end,
       ratePerKmInr: _conveyanceRatePerKm,
     );
     final borrowerLookup = {
@@ -508,9 +512,12 @@ class _MasterDashboardState extends State<MasterDashboard> {
       return true;
     }).toList();
     final slicedLoanIds = {for (final l in slicedLoans) l.loanId};
-    final slicedTxns = portfolio.transactions
-        .where((t) => slicedLoanIds.contains(t.loanId))
-        .toList();
+        final slicedTxns = portfolio.transactions.where((t) {
+      if (!slicedLoanIds.contains(t.loanId)) return false;
+      final dt = t.createdAt as DateTime?;
+      if (dt == null) return true;
+      return !dt.isBefore(sliceRange.start) && !dt.isAfter(sliceRange.end);
+    }).toList();
     final kpi = DelinquencyEngine.computePortfolioKpis(
       loans: slicedLoans,
       transactions: hasSliceFilter ? slicedTxns : portfolio.transactions,
@@ -521,9 +528,62 @@ class _MasterDashboardState extends State<MasterDashboard> {
     return ListView(
       padding: const EdgeInsets.all(14),
       children: [
+        DashboardTimeSlicerBar(
+          controller: _timeSlicerCtrl,
+          referenceNow: now,
+          onChanged: () => setState(() {}),
+        ),
+        const SizedBox(height: 8),
         _DashboardStoryStrip(
           kpi: kpi,
           transactions: hasSliceFilter ? slicedTxns : portfolio.transactions,
+        ),
+        const SizedBox(height: 10),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '7-Tier DPD POS & Period Trend (PBI Aligned)',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final entry in kpi.sevenTierDpdBreakdown.values)
+                      Chip(
+                        label: Text(
+                          '${entry.bucket.label}: ${IndianFormatters.formatInrCompact(entry.posAmount)} (${entry.loanCount})',
+                        ),
+                      ),
+                  ],
+                ),
+                if (kpi.periodTrends.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final pt in kpi.periodTrends)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Chip(
+                              label: Text(
+                                '${pt.periodLabel}: Disb ${pt.disbursedCount} (${IndianFormatters.formatInrCompact(pt.disbursedAmount)}) • POS ${IndianFormatters.formatInrCompact(pt.posAmount)}',
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -673,9 +733,21 @@ class _MasterDashboardState extends State<MasterDashboard> {
             final borrowersById = {
               for (final b in portfolio.borrowers) b.borrowerId: b,
             };
+            final loanCountByBorrower = <String, int>{};
+            for (final l in visibleBaseLoans) {
+              if (l.borrowerId.isNotEmpty) {
+                loanCountByBorrower[l.borrowerId] =
+                    (loanCountByBorrower[l.borrowerId] ?? 0) + 1;
+              }
+            }
             final intelligenceRecords = <LoanRecordMap>[
               for (final loan in slicedLoans)
                 <String, dynamic>{
+                  'repeatLoanCount': loanCountByBorrower[loan.borrowerId] ?? 1,
+                  'displayBorrowerLabel': ((loanCountByBorrower[loan.borrowerId] ?? 1) > 1 &&
+                          loan.applicationNo.trim().isNotEmpty)
+                      ? '${borrowersById[loan.borrowerId]?.fullName ?? loan.borrowerId} (${loan.applicationNo.trim()})'
+                      : (borrowersById[loan.borrowerId]?.fullName ?? loan.borrowerId),
                   'loanId': loan.loanId,
                   'applicationNo': loan.applicationNo,
                   'borrowerId': loan.borrowerId,
