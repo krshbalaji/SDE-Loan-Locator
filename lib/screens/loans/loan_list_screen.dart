@@ -486,7 +486,7 @@ class _LoanListScreenState extends State<LoanListScreen> {
                             ],
                           ),
                           subtitle: Text(
-                            'ID: ${loan.loanId} • ${loan.status.label} • EMI ${IndianFormatters.formatInr(loan.emiAmount, showDecimals: false)}',
+                            'ID: ${loan.loanId} • Cust: ${loan.borrowerId} • ${loan.status.label} • EMI ${IndianFormatters.formatInr(loan.emiAmount, showDecimals: false)}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),

@@ -136,6 +136,16 @@ class _PowerBiDimensionSlicePanelState extends State<PowerBiDimensionSlicePanel>
       );
       acc.loanCount += 1;
       acc.totalPos += loan.principalOutstanding;
+      final elapsedMonths = (loan.netDisbursedAmount > 0 && loan.emiAmount > 0)
+          ? (((loan.netDisbursedAmount - loan.principalOutstanding).clamp(0.0, loan.netDisbursedAmount)) / loan.emiAmount)
+              .round()
+              .clamp(0, loan.tenureInstallments)
+          : 0;
+      final collectedEst = elapsedMonths * loan.emiAmount;
+      final overdueEst = loan.dpd > 0 ? ((loan.dpd / 30.0).ceil() * loan.emiAmount) : 0.0;
+      final demandEst = collectedEst + overdueEst + (loan.status == LoanStatus.closed ? 0.0 : loan.emiAmount);
+      acc.totalDemand += demandEst;
+      acc.totalCollected += collectedEst;
       acc.totalDpd += loan.dpd;
       if (loan.dpd >= 90 || loan.agingBucket == AgingBucket.dpd90Plus) {
         acc.npaPos += loan.principalOutstanding;
@@ -313,9 +323,12 @@ class _SliceAccumulator {
   int loanCount = 0;
   int npaLoans = 0;
   double totalPos = 0;
+  double totalDemand = 0;
+  double totalCollected = 0;
   double npaPos = 0;
   int totalDpd = 0;
 
+  double get collectionPct => totalDemand <= 0 ? 0 : (totalCollected / totalDemand) * 100.0;
   double get npaPosPct => totalPos <= 0 ? 0 : (npaPos / totalPos) * 100.0;
   double get avgDpd => loanCount == 0 ? 0 : totalDpd / loanCount;
 }
