@@ -108,14 +108,22 @@ class PortfolioIntelligenceReport {
 
 class PortfolioIntelligenceService {
   static FunnelStage classifyStage(Map<String, dynamic> row) {
-    final rawStatus = (row['status'] ?? row['stage'] ?? row['currentStatus'] ?? '')
+    final rawStatus = (row['currentStatus'] ?? row['runStatus'] ?? row['status'] ?? row['stage'] ?? '')
         .toString()
         .trim()
         .toLowerCase();
+    final disbStatus = (row['disbStatus'] ?? '').toString().trim().toLowerCase();
+    final disbAmt = _num(row, ['totalDisbursedAmount', 'disbursedAmount', 'netDisbursedAmount']);
+    final sancAmt = _num(row, ['sanctionAmount', 'principalSanctioned']);
     final isClosedFlag = row['isClosedOrRejected'] == true;
 
     if (isClosedFlag ||
         rawStatus.contains('reject') ||
+        rawStatus.contains('logout') ||
+        rawStatus.contains('expired') ||
+        rawStatus.contains('loginexp') ||
+        rawStatus.contains('sancex') ||
+        rawStatus.contains('cancel') ||
         rawStatus.contains('not sanction') ||
         rawStatus.contains('not aprove') ||
         rawStatus.contains('not approve') ||
@@ -124,15 +132,22 @@ class PortfolioIntelligenceService {
       return FunnelStage.closedOrRejected;
     }
 
-    if (rawStatus.contains('disburs') ||
+    if (disbStatus.contains('disburs') ||
+        rawStatus == 'disb' ||
+        rawStatus.contains('disburs') ||
         rawStatus.contains('active') ||
         rawStatus.contains('delinquent') ||
         rawStatus.contains('npa') ||
-        (row['disbursementDate'] != null && row['disbursementDate'].toString().isNotEmpty)) {
+        disbAmt > 0 ||
+        (row['disbursementDate'] != null && row['disbursementDate'].toString().trim().isNotEmpty)) {
       return FunnelStage.disbursed;
     }
 
-    if (rawStatus.contains('sanction') || rawStatus.contains('approv')) {
+    if (rawStatus == 'sanc' ||
+        rawStatus == 'sancwip' ||
+        rawStatus.contains('sanction') ||
+        rawStatus.contains('approv') ||
+        sancAmt > 0) {
       return FunnelStage.sanctioned;
     }
 
