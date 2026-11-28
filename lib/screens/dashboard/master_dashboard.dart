@@ -571,7 +571,50 @@ class _MasterDashboardState extends State<MasterDashboard> {
             ),
                   ],
                 ),
-                if (kpi.bookBreakdown.isNotEmpty) ...[
+                if (kpi.sevenTierDpdBreakdown.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  ...(() {
+                    final buckets = kpi.sevenTierDpdBreakdown.values.toList();
+                    final maxPos = buckets.fold<double>(
+                      0.0,
+                      (m, e) => e.posAmount > m ? e.posAmount : m,
+                    );
+                    return [
+                      for (final entry in buckets)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    entry.bucket.label,
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                  ),
+                                  Text(
+                                    '${IndianFormatters.formatInrCompact(entry.posAmount)} (${entry.loanCount})',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: maxPos > 0 ? (entry.posAmount / maxPos).clamp(0.0, 1.0) : 0.0,
+                                  minHeight: 6,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ];
+                  })(),
+                ],
+
+                                if (kpi.bookBreakdown.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -623,6 +666,48 @@ class _MasterDashboardState extends State<MasterDashboard> {
                     ),
                   ),
                 ],
+                  const SizedBox(height: 8),
+                  ...(() {
+                    final maxDisb = kpi.periodTrends.fold<double>(
+                      0.0,
+                      (m, pt) => pt.disbursedAmount > m ? pt.disbursedAmount : m,
+                    );
+                    return [
+                      for (final pt in kpi.periodTrends)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 5),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 68,
+                                child: Text(
+                                  pt.periodLabel,
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: LinearProgressIndicator(
+                                    value: maxDisb > 0
+                                        ? (pt.disbursedAmount / maxDisb).clamp(0.0, 1.0)
+                                        : 0.0,
+                                    minHeight: 6,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                IndianFormatters.formatInrCompact(pt.disbursedAmount),
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ];
+                  })(),
+
               ],
             ),
           ),
