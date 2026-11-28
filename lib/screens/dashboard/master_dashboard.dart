@@ -15,6 +15,7 @@ import '../../services/local_vault_service.dart';
 import '../../services/location_service.dart';
 import '../../services/pdf_export_service.dart';
 import '../../utils/indian_formatters.dart';
+import '../../utils/omni_search.dart';
 import '../../widgets/aging_bucket_chart.dart';
 import '../../services/portfolio_intelligence_service.dart';
 import '../../widgets/conversion_deviation_intelligence_card.dart';
@@ -48,6 +49,10 @@ class _MasterDashboardState extends State<MasterDashboard> {
   String? _selectedSliceProductId;
   AnalyticsDimension? _visualDimension;
   String? _visualSliceKey;
+  CollectionCategory? _queueCategoryFilter;
+  String? _queueSearch;
+  AgingBucket? _loanBucketFilter;
+  String? _loanSearch;
 
   Future<void> _showProductEditorDialog(
     LoanPortfolioProvider portfolio, {
@@ -311,9 +316,15 @@ class _MasterDashboardState extends State<MasterDashboard> {
 
     final pages = [
       _buildOverview(context, portfolio, auth),
-      const LoanListScreen(),
+      LoanListScreen(
+        initialBucket: _loanBucketFilter,
+        initialSearch: _loanSearch,
+      ),
       const FieldLocatorMapScreen(),
-      const CollectionsQueueScreen(),
+      CollectionsQueueScreen(
+        initialCategory: _queueCategoryFilter,
+        initialSearch: _queueSearch,
+      ),
       const TeamAllocationScreen(),
       const ExcelImportScreen(),
       GovernanceApprovalsPanel(currentUser: auth.currentUser!),
@@ -560,13 +571,16 @@ class _MasterDashboardState extends State<MasterDashboard> {
                 '${entry.bucket.label}: ${IndianFormatters.formatInrCompact(entry.posAmount)} (${entry.loanCount})',
               ),
               onPressed: () {
-                setState(() => _selectedIndex = 3);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Filtered Recovery Queue context: ${entry.bucket.label} (${entry.loanCount} loans)'),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
+                final cat = entry.bucket.order >= 5
+                    ? CollectionCategory.npa
+                    : entry.bucket.order > 1
+                        ? CollectionCategory.dpd
+                        : CollectionCategory.regular;
+                setState(() {
+                  _queueCategoryFilter = cat;
+                  _queueSearch = null;
+                  _selectedIndex = 3;
+                });
               },
             ),
                   ],
@@ -626,13 +640,11 @@ class _MasterDashboardState extends State<MasterDashboard> {
                             '${b.bookName}: ${IndianFormatters.formatInrCompact(b.posAmount)} (${b.loanCount}) • NPA ${IndianFormatters.formatInrCompact(b.npaPosAmount)}',
                           ),
                           onPressed: () {
-                            setState(() => _selectedIndex = 1);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Book slice: ${b.bookName} (${b.loanCount} active loans)'),
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
+                            setState(() {
+                              _loanSearch = b.bookName;
+                              _loanBucketFilter = null;
+                              _selectedIndex = 1;
+                            });
                           },
                         ),
                     ],
@@ -652,13 +664,11 @@ class _MasterDashboardState extends State<MasterDashboard> {
                                 '${pt.periodLabel}: Disb ${pt.disbursedCount} (${IndianFormatters.formatInrCompact(pt.disbursedAmount)}) • POS ${IndianFormatters.formatInrCompact(pt.posAmount)}',
                               ),
                               onPressed: () {
-                                setState(() => _selectedIndex = 1);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Period focus: ${pt.periodLabel} (${pt.disbursedCount} disbursed)'),
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
+                                setState(() {
+                                  _loanSearch = pt.periodLabel;
+                                  _loanBucketFilter = null;
+                                  _selectedIndex = 1;
+                                });
                               },
                             ),
                           ),

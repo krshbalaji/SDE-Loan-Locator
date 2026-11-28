@@ -21,10 +21,12 @@ class CollectionsQueueScreen extends StatefulWidget {
     super.key,
     this.agentIdFilter,
     this.initialCategory,
+    this.initialSearch,
   });
 
   final String? agentIdFilter;
   final CollectionCategory? initialCategory;
+  final String? initialSearch;
 
   @override
   State<CollectionsQueueScreen> createState() => _CollectionsQueueScreenState();
@@ -41,6 +43,9 @@ class _CollectionsQueueScreenState extends State<CollectionsQueueScreen> {
   void initState() {
     super.initState();
     _categoryFilter = widget.initialCategory;
+    if (widget.initialSearch != null && widget.initialSearch!.trim().isNotEmpty) {
+      _search = widget.initialSearch!.trim();
+    }
   }
 
   @override
@@ -48,6 +53,11 @@ class _CollectionsQueueScreenState extends State<CollectionsQueueScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialCategory != widget.initialCategory) {
       setState(() => _categoryFilter = widget.initialCategory);
+    }
+    if (oldWidget.initialSearch != widget.initialSearch &&
+        widget.initialSearch != null &&
+        widget.initialSearch!.trim().isNotEmpty) {
+      setState(() => _search = widget.initialSearch!.trim());
     }
   }
 

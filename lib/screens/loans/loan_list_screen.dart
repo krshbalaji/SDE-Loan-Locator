@@ -16,9 +16,16 @@ import 'loan_detail_screen.dart';
 
 /// Portfolio loan directory with search, aging filters, and New Loan Origination dialog.
 class LoanListScreen extends StatefulWidget {
-  const LoanListScreen({super.key, this.agentIdFilter});
+  const LoanListScreen({
+    super.key,
+    this.agentIdFilter,
+    this.initialBucket,
+    this.initialSearch,
+  });
 
   final String? agentIdFilter;
+  final AgingBucket? initialBucket;
+  final String? initialSearch;
 
   @override
   State<LoanListScreen> createState() => _LoanListScreenState();
@@ -27,6 +34,28 @@ class LoanListScreen extends StatefulWidget {
 class _LoanListScreenState extends State<LoanListScreen> {
   String _search = '';
   AgingBucket? _bucketFilter;
+
+  @override
+  void initState() {
+    super.initState();
+    _bucketFilter = widget.initialBucket;
+    if (widget.initialSearch != null && widget.initialSearch!.trim().isNotEmpty) {
+      _search = widget.initialSearch!.trim();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant LoanListScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialBucket != widget.initialBucket && widget.initialBucket != null) {
+      setState(() => _bucketFilter = widget.initialBucket);
+    }
+    if (oldWidget.initialSearch != widget.initialSearch &&
+        widget.initialSearch != null &&
+        widget.initialSearch!.trim().isNotEmpty) {
+      setState(() => _search = widget.initialSearch!.trim());
+    }
+  }
 
   Future<void> _showOriginateLoanDialog(
     LoanPortfolioProvider portfolio,
