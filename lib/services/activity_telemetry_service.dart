@@ -173,6 +173,9 @@ class ActivityTelemetryService extends ChangeNotifier
     _demoStartedAt = startedAt;
   }
   Timer? _heartbeatTimer;
+  Timer? _debouncePushTimer;
+  String? _currentScreen;
+  DateTime? _currentScreenEnteredAt;
   DateTime? _lastTickAt;
   bool _isForeground = true;
   bool _isSyncing = false;
@@ -207,6 +210,14 @@ class ActivityTelemetryService extends ChangeNotifier
           .doc(session.sessionId)
           .set(session.toMap(), SetOptions(merge: true));
     } catch (_) {}
+  }
+
+  void _scheduleDebouncedPush(TesterSessionRecord session) {
+    if (!useFirebase) return;
+    _debouncePushTimer?.cancel();
+    _debouncePushTimer = Timer(const Duration(seconds: 4), () {
+      unawaited(_pushSessionToFirestore(session));
+    });
   }
 
   Future<void> syncFromFirestore() async {
@@ -283,8 +294,9 @@ class ActivityTelemetryService extends ChangeNotifier
     _isForeground = true;
 
     _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      _flushElapsedTime(persistRemote: true);
+    _debouncePushTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      _flushElapsedTime(persistRemote: false);
     });
 
     notifyListeners();
@@ -349,6 +361,7 @@ class ActivityTelemetryService extends ChangeNotifier
       ),
     );
     _heartbeatTimer?.cancel();
+    _debouncePushTimer?.cancel();
     _heartbeatTimer = null;
     _activeSession = null;
     _lastTickAt = null;
@@ -359,6 +372,22 @@ class ActivityTelemetryService extends ChangeNotifier
   void logScreenView(String screenName) {
     final session = _activeSession;
     if (session == null || screenName.trim().isEmpty) return;
+    final now = DateTime.now();
+    if (_currentScreen != null && _currentScreenEnteredAt != null) {
+      final dwellSec = now.difference(_currentScreenEnteredAt!).inSeconds;
+      if (dwellSec >= 2) {
+        session.events.add(
+          ActivityEventRecord(
+            timestamp: now,
+            type: 'dwell',
+            label: 'Viewed ',
+            detail: 'dwell: s',
+          ),
+        );
+      }
+    }
+    _currentScreen = screenName.trim();
+    _currentScreenEnteredAt = now;
     _flushElapsedTime();
     final clean = screenName.trim();
     if (!session.screensVisited.contains(clean)) {
@@ -394,7 +423,7 @@ class ActivityTelemetryService extends ChangeNotifier
       ),
     );
     notifyListeners();
-    _pushSessionToFirestore(session);
+    _scheduleDebouncedPush(session);
   }
 
   @override
@@ -413,6 +442,7 @@ class ActivityTelemetryService extends ChangeNotifier
   @override
   void dispose() {
     _heartbeatTimer?.cancel();
+    _debouncePushTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -443,4 +473,12 @@ class ActivityTelemetryService extends ChangeNotifier
     return buf.toString();
   }
 
+
+  void logFilterApplied(String screenName, String filterSummary) {
+    logFeatureReviewed('Applied Filter ()', detail: filterSummary);
+  }
+
+  void logInPageAction(String actionLabel, {String? detail}) {
+    logFeatureReviewed(actionLabel, detail: detail);
+  }
 }

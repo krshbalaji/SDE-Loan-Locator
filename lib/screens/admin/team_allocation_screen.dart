@@ -134,7 +134,7 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                           selectedRole = v;
                           selectedFeatures
                             ..clear()
-                            ..addAll(AppFeature.defaultsForRole(v));
+                            ..addAll(AppFeature.defaultsForRole(v))..remove(AppFeature.testerActivityReport);
                         });
                       }
                     },
@@ -246,8 +246,7 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
     );
     var selectedRole =
         creator.isSuperAdmin ? UserRole.branchManager : allowedRoles.last;
-    final selectedFeatures =
-        Set<AppFeature>.from(AppFeature.defaultsForRole(selectedRole));
+    final selectedFeatures = Set<AppFeature>.from(AppFeature.defaultsForRole(selectedRole))..remove(AppFeature.testerActivityReport);
     final canEditFeatures = creator.isSuperAdmin || creator.isExecutive;
     var saving = false;
 
@@ -282,7 +281,7 @@ class _TeamAllocationScreenState extends State<TeamAllocationScreen> {
                           selectedRole = v;
                           selectedFeatures
                             ..clear()
-                            ..addAll(AppFeature.defaultsForRole(v));
+                            ..addAll(AppFeature.defaultsForRole(v))..remove(AppFeature.testerActivityReport);
                         });
                       }
                     },

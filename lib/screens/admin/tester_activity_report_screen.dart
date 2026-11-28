@@ -448,7 +448,7 @@ class _TesterActivityReportScreenState
         for (final item in userSessions) ...item.itemsReviewed,
       }.toList();
 
-      return _UserSummaryCard(
+            return _UserSummaryCard(
         email: entry.key,
         roleLabel: latest.roleLabel,
         platform: latest.platform,
@@ -457,7 +457,9 @@ class _TesterActivityReportScreenState
         totalSeconds: totalSeconds,
         screens: screens,
         reviewed: reviewed,
+        sessions: userSessions,
         formatDuration: _formatDuration,
+        formatTimestamp: _formatTimestamp,
       );
     }).toList();
   }
@@ -514,7 +516,9 @@ class _UserSummaryCard extends StatelessWidget {
     required this.totalSeconds,
     required this.screens,
     required this.reviewed,
-    required this.formatDuration,
+        required this.formatDuration,
+    required this.sessions,
+    required this.formatTimestamp,
   });
 
   final String email;
@@ -526,12 +530,17 @@ class _UserSummaryCard extends StatelessWidget {
   final List<String> screens;
   final List<String> reviewed;
   final String Function(int) formatDuration;
+  final List<TesterSessionRecord> sessions;
+  final String Function(DateTime) formatTimestamp;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+        return Card(
       margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _openDrillDown(context),
+        child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -569,6 +578,86 @@ class _UserSummaryCard extends StatelessWidget {
               Text(
                 'Actions & Records Reviewed (${reviewed.length}): ${reviewed.join(", ")}',
                 style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  'Tap for session & dwell drill-down',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_right,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      ),
+    );
+  }
+
+  void _openDrillDown(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        builder: (_, scrollCtrl) => ListView(
+          controller: scrollCtrl,
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(
+              '$email ($roleLabel)',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Sessions: ${sessions.length} • Total Active: ${formatDuration(totalSeconds)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const Divider(height: 20),
+            for (var i = 0; i < sessions.length; i++) ...[
+              Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Session #${sessions.length - i} • ${formatDuration(sessions[i].activeSeconds)}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        'Login: ${formatTimestamp(sessions[i].loginAt)} • Last: ${formatTimestamp(sessions[i].lastActiveAt)}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 8),
+                      for (final ev in sessions[i].events.reversed)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            '[${ev.type}] ${ev.label}${ev.detail != null && ev.detail!.isNotEmpty ? ' - ${ev.detail}' : ''} (${formatTimestamp(ev.timestamp)})',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ],

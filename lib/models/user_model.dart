@@ -70,7 +70,8 @@ enum AppFeature {
   paymentCollection('PAYMENT_COLLECTION', 'Record EMI / Field Payments'),
   paymentReversal('PAYMENT_REVERSAL', 'Reverse Ledger Transactions'),
   excelImportExport('EXCEL_IMPORT_EXPORT', 'Excel / CSV Import & Vault Backup'),
-  teamAndPermissions('TEAM_AND_PERMISSIONS', 'Staff Provisioning, Territory & Permissions');
+  teamAndPermissions('TEAM_AND_PERMISSIONS', 'Staff Provisioning, Territory & Permissions'),
+  testerActivityReport('TESTER_ACTIVITY_REPORT', 'Tester & User Activity Report');
 
   const AppFeature(this.wireValue, this.label);
   final String wireValue;
