@@ -117,6 +117,21 @@ class SevenTierDpdStat {
   final double posAmount;
 }
 
+
+class BookExposureStat {
+  const BookExposureStat({
+    required this.bookName,
+    required this.loanCount,
+    required this.posAmount,
+    required this.npaPosAmount,
+  });
+
+  final String bookName;
+  final int loanCount;
+  final double posAmount;
+  final double npaPosAmount;
+}
+
 class PeriodTrendPoint {
   const PeriodTrendPoint({
     required this.periodKey,
@@ -161,6 +176,13 @@ class PortfolioKpiSummary {
     this.periodDisbursedCount = 0,
     this.periodDisbursedAmount = 0.0,
     this.periodLoginToDisbursalRatioPct = 0.0,
+    this.cohortDisbursedCount = 0,
+    this.cohortConversionRatioPct = 0.0,
+    this.totalDemandMtd = 0.0,
+    this.totalDemandYtd = 0.0,
+    this.demandCollectionPct = 0.0,
+    this.totalFcAndLc = 0.0,
+    this.bookBreakdown = const [],
     this.currentCollectionEfficiencyPct = 0.0,
     this.overallCollectionEfficiencyPct = 0.0,
     this.emiPaidFullCount = 0,
@@ -195,6 +217,13 @@ class PortfolioKpiSummary {
   final int periodDisbursedCount;
   final double periodDisbursedAmount;
   final double periodLoginToDisbursalRatioPct;
+  final int cohortDisbursedCount;
+  final double cohortConversionRatioPct;
+  final double totalDemandMtd;
+  final double totalDemandYtd;
+  final double demandCollectionPct;
+  final double totalFcAndLc;
+  final List<BookExposureStat> bookBreakdown;
   final double currentCollectionEfficiencyPct;
   final double overallCollectionEfficiencyPct;
   final int emiPaidFullCount;
@@ -750,6 +779,96 @@ class DelinquencyEngine {
                   100,
             )
           : 0.0,
+      cohortDisbursedCount: loans
+          .where((l) =>
+              !l.disbursementDate.isBefore(startOfMonth) &&
+              (l.netDisbursedAmount > 0 ||
+                  l.status == LoanStatus.active ||
+                  l.status == LoanStatus.closed ||
+                  l.status == LoanStatus.writtenOff))
+          .length,
+      cohortConversionRatioPct: loans
+              .where((l) => !l.disbursementDate.isBefore(startOfMonth))
+              .isNotEmpty
+          ? IndianFormatters.roundPaise(
+              (loans
+                          .where((l) =>
+                              !l.disbursementDate.isBefore(startOfMonth) &&
+                              (l.netDisbursedAmount > 0 ||
+                                  l.status == LoanStatus.active ||
+                                  l.status == LoanStatus.closed ||
+                                  l.status == LoanStatus.writtenOff))
+                          .length /
+                      loans
+                          .where((l) => !l.disbursementDate.isBefore(startOfMonth))
+                          .length) *
+                  100,
+            )
+          : 0.0,
+      totalDemandMtd: IndianFormatters.roundPaise(
+        activeLoans.fold<double>(0.0, (sum, l) => sum + l.emiAmount),
+      ),
+      totalDemandYtd: IndianFormatters.roundPaise(
+        activeLoans.fold<double>(
+          0.0,
+          (sum, l) => sum + l.emiAmount + l.feesOutstanding,
+        ),
+      ),
+      demandCollectionPct: activeLoans.fold<double>(0.0, (sum, l) => sum + l.emiAmount) >
+              0
+          ? IndianFormatters.roundPaise(
+              min(
+                150.0,
+                (max(0.0, collectedMtd) /
+                        activeLoans.fold<double>(
+                            0.0, (sum, l) => sum + l.emiAmount)) *
+                    100,
+              ),
+            )
+          : 0.0,
+      totalFcAndLc: IndianFormatters.roundPaise(
+        loans.fold<double>(
+          0.0,
+          (sum, l) =>
+              sum +
+              l.feesOutstanding +
+              (l.status == LoanStatus.writtenOff || l.status == LoanStatus.closed
+                  ? l.interestOutstanding
+                  : 0.0),
+        ),
+      ),
+      bookBreakdown: () {
+        final grouped = <String, List<LoanModel>>{};
+        for (final l in activeLoans) {
+          final rawTag = (l.assetClassification ?? '').trim().toUpperCase();
+          final book = rawTag.isNotEmpty
+              ? rawTag
+              : (l.status == LoanStatus.restructured
+                  ? 'RESTRUCTURED BOOK'
+                  : (l.productId.toUpperCase().contains('CO')
+                      ? 'CO LENDING'
+                      : 'OWN BOOK'));
+          (grouped[book] ??= <LoanModel>[]).add(l);
+        }
+        return [
+          for (final entry in grouped.entries)
+            BookExposureStat(
+              bookName: entry.key,
+              loanCount: entry.value.length,
+              posAmount: IndianFormatters.roundPaise(
+                entry.value.fold<double>(
+                  0.0,
+                  (s, x) => s + x.principalOutstanding,
+                ),
+              ),
+              npaPosAmount: IndianFormatters.roundPaise(
+                entry.value
+                    .where((x) => x.dpd >= 90)
+                    .fold<double>(0.0, (s, x) => s + x.principalOutstanding),
+              ),
+            ),
+        ];
+      }(),
       currentCollectionEfficiencyPct: activeLoans
               .fold<double>(0.0, (sum, l) => sum + l.emiAmount) >
           0
