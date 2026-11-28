@@ -588,7 +588,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
                   ],
                 ),
                 if (kpi.sevenTierDpdBreakdown.isNotEmpty) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   ...(() {
                     final buckets = kpi.sevenTierDpdBreakdown.values.toList();
                     final totalPos = buckets.fold<double>(0.0, (s, e) => s + e.posAmount);
@@ -607,69 +607,95 @@ class _MasterDashboardState extends State<MasterDashboard> {
                       Color(0xFF6A1B9A),
                     ];
                     return [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: SizedBox(
-                          height: 14,
-                          child: Row(
-                            children: [
-                              for (var i = 0; i < buckets.length; i++)
-                                if (buckets[i].posAmount > 0)
-                                  Expanded(
-                                    flex: ((buckets[i].posAmount / (totalPos > 0 ? totalPos : 1)) * 1000)
-                                        .round()
-                                        .clamp(1, 1000),
-                                    child: GestureDetector(
-                                      onTap: () => setState(
-                                        () => _selectedDpdBucketKey = buckets[i].bucket.name,
-                                      ),
-                                      child: Container(
-                                        color: palette[i % palette.length].withValues(
-                                          alpha: _selectedDpdBucketKey == null ||
-                                                  _selectedDpdBucketKey == buckets[i].bucket.name
-                                              ? 1.0
-                                              : 0.35,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 136,
+                            height: 136,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                CustomPaint(
+                                  size: const Size(136, 136),
+                                  painter: _DpdDonutPainter(
+                                    values: [for (final b in buckets) b.posAmount],
+                                    colors: palette,
+                                    selectedIndex: buckets.indexWhere((b) => b.bucket.name == activeBucket.bucket.name),
+                                  ),
+                                ),
+                                Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '${activeShare.toStringAsFixed(0)}%',
+                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                    ),
+                                    Text(
+                                      activeBucket.bucket.label,
+                                      style: const TextStyle(fontSize: 10),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: [
+                                    for (var i = 0; i < buckets.length; i++)
+                                      ChoiceChip(
+                                        visualDensity: VisualDensity.compact,
+                                        avatar: CircleAvatar(
+                                          radius: 5,
+                                          backgroundColor: palette[i % palette.length],
                                         ),
+                                        label: Text(
+                                          '${buckets[i].bucket.label} · ${IndianFormatters.formatInrCompact(buckets[i].posAmount)}',
+                                          style: const TextStyle(fontSize: 11),
+                                        ),
+                                        selected: buckets[i].bucket.name == activeBucket.bucket.name,
+                                        onSelected: (_) => setState(() => _selectedDpdBucketKey = buckets[i].bucket.name),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '${activeBucket.bucket.label}: ${IndianFormatters.formatInrCompact(activeBucket.posAmount)} (${activeBucket.loanCount} loans)',
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                                       ),
                                     ),
-                                  ),
-                            ],
+                                    TextButton(
+                                      onPressed: () {
+                                        final cat = activeBucket.bucket.order >= 5
+                                            ? CollectionCategory.npa
+                                            : activeBucket.bucket.order > 1
+                                                ? CollectionCategory.dpd
+                                                : CollectionCategory.regular;
+                                        setState(() {
+                                          _queueCategoryFilter = cat;
+                                          _queueSearch = null;
+                                          _selectedIndex = 3;
+                                        });
+                                      },
+                                      child: const Text('Open Queue'),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '${activeBucket.bucket.label}: ${IndianFormatters.formatInrCompact(activeBucket.posAmount)} '
-                                '(${activeBucket.loanCount} loans · ${activeShare.toStringAsFixed(1)}% of POS)',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                final cat = activeBucket.bucket.order >= 5
-                                    ? CollectionCategory.npa
-                                    : activeBucket.bucket.order > 1
-                                        ? CollectionCategory.dpd
-                                        : CollectionCategory.regular;
-                                setState(() {
-                                  _queueCategoryFilter = cat;
-                                  _queueSearch = null;
-                                  _selectedIndex = 3;
-                                });
-                              },
-                              child: const Text('Open Queue'),
-                            ),
-                          ],
-                        ),
+                        ],
                       ),
                     ];
                   })(),
@@ -723,32 +749,66 @@ class _MasterDashboardState extends State<MasterDashboard> {
                     ),
                   ),
                 ],
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   ...(() {
-                    final selectedPt = kpi.periodTrends.firstWhere(
+                    final pts = kpi.periodTrends;
+                    final selectedPt = pts.firstWhere(
                       (pt) => pt.periodLabel == _selectedPeriodLabel,
-                      orElse: () => kpi.periodTrends.last,
+                      orElse: () => pts.last,
                     );
-                    final maxDisb = kpi.periodTrends.fold<double>(
-                      0.0,
-                      (m, pt) => pt.disbursedAmount > m ? pt.disbursedAmount : m,
-                    );
-                    final peakShare = maxDisb > 0 ? (selectedPt.disbursedAmount / maxDisb) * 100 : 0.0;
+                    final maxDisb = pts.fold<double>(0.0, (m, pt) => pt.disbursedAmount > m ? pt.disbursedAmount : m);
                     return [
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          for (final pt in kpi.periodTrends)
-                            ChoiceChip(
-                              label: Text(
-                                '${pt.periodLabel} · ${IndianFormatters.formatInrCompact(pt.disbursedAmount)}',
-                                style: const TextStyle(fontSize: 11),
+                      SizedBox(
+                        height: 92,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            for (final pt in pts) ...[
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setState(() => _selectedPeriodLabel = pt.periodLabel),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        IndianFormatters.formatInrCompact(pt.disbursedAmount),
+                                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      AnimatedContainer(
+                                        duration: const Duration(milliseconds: 220),
+                                        height: maxDisb > 0
+                                            ? ((pt.disbursedAmount / maxDisb) * 52).clamp(8.0, 52.0)
+                                            : 8.0,
+                                        decoration: BoxDecoration(
+                                          borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                                          color: pt.periodLabel == selectedPt.periodLabel
+                                              ? Theme.of(context).colorScheme.primary
+                                              : Theme.of(context).colorScheme.primary.withValues(alpha: 0.35),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        pt.periodLabel,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: pt.periodLabel == selectedPt.periodLabel
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                              selected: pt.periodLabel == selectedPt.periodLabel,
-                              onSelected: (_) => setState(() => _selectedPeriodLabel = pt.periodLabel),
-                            ),
-                        ],
+                              if (pt != pts.last) const SizedBox(width: 6),
+                            ],
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 6),
                       Row(
@@ -757,8 +817,7 @@ class _MasterDashboardState extends State<MasterDashboard> {
                             child: Text(
                               '${selectedPt.periodLabel}: Disb ${selectedPt.disbursedCount} '
                               '(${IndianFormatters.formatInrCompact(selectedPt.disbursedAmount)}) · '
-                              'POS ${IndianFormatters.formatInrCompact(selectedPt.posAmount)} · '
-                              '${peakShare.toStringAsFixed(0)}% of peak',
+                              'POS ${IndianFormatters.formatInrCompact(selectedPt.posAmount)}',
                               style: const TextStyle(fontSize: 12),
                             ),
                           ),
@@ -774,7 +833,6 @@ class _MasterDashboardState extends State<MasterDashboard> {
                       ),
                     ];
                   })(),
-
               ],
             ),
           ),
@@ -1385,4 +1443,57 @@ class _DashboardStoryStrip extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DpdDonutPainter extends CustomPainter {
+  final List<double> values;
+  final List<Color> colors;
+  final int selectedIndex;
+
+  const _DpdDonutPainter({
+    required this.values,
+    required this.colors,
+    required this.selectedIndex,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = values.fold<double>(0.0, (s, v) => s + (v > 0 ? v : 0.0));
+    final rect = Offset.zero & size;
+    const strokeWidth = 18.0;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.butt;
+
+    if (total <= 0) {
+      paint
+        ..color = Colors.grey.withValues(alpha: 0.25)
+        ..strokeWidth = strokeWidth;
+      canvas.drawArc(rect.deflate(strokeWidth / 2), 0, 6.2831853, false, paint);
+      return;
+    }
+
+    var startAngle = -1.5707963;
+    for (var i = 0; i < values.length; i++) {
+      final v = values[i] > 0 ? values[i] : 0.0;
+      if (v <= 0) continue;
+      final sweep = (v / total) * 6.2831853;
+      final isSelected = i == selectedIndex;
+      paint
+        ..color = colors[i % colors.length].withValues(alpha: isSelected ? 1.0 : 0.55)
+        ..strokeWidth = isSelected ? strokeWidth + 3 : strokeWidth;
+      canvas.drawArc(
+        rect.deflate((strokeWidth + 3) / 2),
+        startAngle + 0.02,
+        (sweep - 0.04).clamp(0.01, sweep),
+        false,
+        paint,
+      );
+      startAngle += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DpdDonutPainter old) =>
+      old.selectedIndex != selectedIndex || old.values.length != values.length;
 }

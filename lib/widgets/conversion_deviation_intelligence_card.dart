@@ -62,7 +62,7 @@ class ConversionDeviationIntelligenceCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'L->D: ${funnel.loginToDisbursedCountPct.toStringAsFixed(1)}% cnt · ${funnel.loginToDisbursedAmountPct.toStringAsFixed(1)}% ₹',
+                  'Active Conv: ${funnel.eligibleToDisbursedCountPct.toStringAsFixed(1)}% (${funnel.disbursedCount}/${funnel.activeEligibleCount}) · All: ${funnel.loginToDisbursedCountPct.toStringAsFixed(1)}%',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
