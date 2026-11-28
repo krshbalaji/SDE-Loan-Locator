@@ -380,8 +380,8 @@ class ActivityTelemetryService extends ChangeNotifier
           ActivityEventRecord(
             timestamp: now,
             type: 'dwell',
-            label: 'Viewed ',
-            detail: 'dwell: s',
+            label: 'Viewed $_currentScreen',
+            detail: 'dwell: ${dwellSec}s',
           ),
         );
       }
@@ -475,7 +475,7 @@ class ActivityTelemetryService extends ChangeNotifier
 
 
   void logFilterApplied(String screenName, String filterSummary) {
-    logFeatureReviewed('Applied Filter ()', detail: filterSummary);
+    logFeatureReviewed('Applied Filter ($screenName)', detail: filterSummary);
   }
 
   void logInPageAction(String actionLabel, {String? detail}) {

@@ -555,13 +555,46 @@ class _MasterDashboardState extends State<MasterDashboard> {
                   runSpacing: 8,
                   children: [
                     for (final entry in kpi.sevenTierDpdBreakdown.values)
-                      Chip(
-                        label: Text(
-                          '${entry.bucket.label}: ${IndianFormatters.formatInrCompact(entry.posAmount)} (${entry.loanCount})',
-                        ),
-                      ),
+            ActionChip(
+              label: Text(
+                '${entry.bucket.label}: ${IndianFormatters.formatInrCompact(entry.posAmount)} (${entry.loanCount})',
+              ),
+              onPressed: () {
+                setState(() => _selectedIndex = 3);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Filtered Recovery Queue context: ${entry.bucket.label} (${entry.loanCount} loans)'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
                   ],
                 ),
+                if (kpi.bookBreakdown.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final b in kpi.bookBreakdown)
+                        ActionChip(
+                          label: Text(
+                            '${b.bookName}: ${IndianFormatters.formatInrCompact(b.posAmount)} (${b.loanCount}) • NPA ${IndianFormatters.formatInrCompact(b.npaPosAmount)}',
+                          ),
+                          onPressed: () {
+                            setState(() => _selectedIndex = 1);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Book slice: ${b.bookName} (${b.loanCount} active loans)'),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                ],
                 if (kpi.periodTrends.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   SingleChildScrollView(
@@ -571,10 +604,19 @@ class _MasterDashboardState extends State<MasterDashboard> {
                         for (final pt in kpi.periodTrends)
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
-                            child: Chip(
+                            child: ActionChip(
                               label: Text(
                                 '${pt.periodLabel}: Disb ${pt.disbursedCount} (${IndianFormatters.formatInrCompact(pt.disbursedAmount)}) • POS ${IndianFormatters.formatInrCompact(pt.posAmount)}',
                               ),
+                              onPressed: () {
+                                setState(() => _selectedIndex = 1);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Period focus: ${pt.periodLabel} (${pt.disbursedCount} disbursed)'),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              },
                             ),
                           ),
                       ],
