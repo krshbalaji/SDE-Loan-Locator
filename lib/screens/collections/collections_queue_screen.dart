@@ -33,6 +33,7 @@ class CollectionsQueueScreen extends StatefulWidget {
 }
 
 class _CollectionsQueueScreenState extends State<CollectionsQueueScreen> {
+  final TextEditingController _searchCtrl = TextEditingController();
   String _search = '';
   SearchFieldScope _searchScope = SearchFieldScope.all;
   CollectionCategory? _categoryFilter;
@@ -45,6 +46,7 @@ class _CollectionsQueueScreenState extends State<CollectionsQueueScreen> {
     _categoryFilter = widget.initialCategory;
     if (widget.initialSearch != null && widget.initialSearch!.trim().isNotEmpty) {
       _search = widget.initialSearch!.trim();
+      _searchCtrl.text = _search;
     }
   }
 
@@ -57,8 +59,16 @@ class _CollectionsQueueScreenState extends State<CollectionsQueueScreen> {
     if (oldWidget.initialSearch != widget.initialSearch &&
         widget.initialSearch != null &&
         widget.initialSearch!.trim().isNotEmpty) {
-      setState(() => _search = widget.initialSearch!.trim());
+      final q = widget.initialSearch!.trim();
+      setState(() => _search = q);
+      _searchCtrl.text = q;
     }
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _showQuickPaymentDialog(

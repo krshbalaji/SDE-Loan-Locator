@@ -32,6 +32,7 @@ class LoanListScreen extends StatefulWidget {
 }
 
 class _LoanListScreenState extends State<LoanListScreen> {
+  final TextEditingController _searchCtrl = TextEditingController();
   String _search = '';
   AgingBucket? _bucketFilter;
 
@@ -41,6 +42,7 @@ class _LoanListScreenState extends State<LoanListScreen> {
     _bucketFilter = widget.initialBucket;
     if (widget.initialSearch != null && widget.initialSearch!.trim().isNotEmpty) {
       _search = widget.initialSearch!.trim();
+      _searchCtrl.text = _search;
     }
   }
 
@@ -53,8 +55,16 @@ class _LoanListScreenState extends State<LoanListScreen> {
     if (oldWidget.initialSearch != widget.initialSearch &&
         widget.initialSearch != null &&
         widget.initialSearch!.trim().isNotEmpty) {
-      setState(() => _search = widget.initialSearch!.trim());
+      final q = widget.initialSearch!.trim();
+      setState(() => _search = q);
+      _searchCtrl.text = q;
     }
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _showOriginateLoanDialog(
