@@ -257,6 +257,9 @@ class _PowerBiDimensionSlicePanelState extends State<PowerBiDimensionSlicePanel>
                     DataColumn(label: Text('Segment')),
                     DataColumn(label: Text('Loans'), numeric: true),
                     DataColumn(label: Text('Total POS'), numeric: true),
+                    DataColumn(label: Text('Demand'), numeric: true),
+                    DataColumn(label: Text('Collected'), numeric: true),
+                    DataColumn(label: Text('Coll %'), numeric: true),
                     DataColumn(label: Text('NPA POS'), numeric: true),
                     DataColumn(label: Text('NPA POS %'), numeric: true),
                     DataColumn(label: Text('Avg DPD'), numeric: true),
@@ -275,12 +278,24 @@ class _PowerBiDimensionSlicePanelState extends State<PowerBiDimensionSlicePanel>
                           DataCell(
                             Text(
                               r.label,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600),
+                              style: const TextStyle(fontWeight: FontWeight.w600),
                             ),
                           ),
                           DataCell(Text('${r.loanCount}')),
                           DataCell(Text(IndianFormatters.formatInr(r.totalPos))),
+                          DataCell(Text(IndianFormatters.formatInr(r.totalDemand))),
+                          DataCell(Text(IndianFormatters.formatInr(r.totalCollected))),
+                          DataCell(
+                            Text(
+                              '${r.collectionPct.toStringAsFixed(1)}%',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: r.collectionPct >= 85.0
+                                    ? Colors.green.shade700
+                                    : Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
                           DataCell(Text(IndianFormatters.formatInr(r.npaPos))),
                           DataCell(
                             Text(

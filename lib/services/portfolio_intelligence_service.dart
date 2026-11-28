@@ -113,10 +113,25 @@ class PortfolioIntelligenceService {
         .trim()
         .toLowerCase();
     final disbStatus = (row['disbStatus'] ?? '').toString().trim().toLowerCase();
-    final disbAmt = _num(row, ['totalDisbursedAmount', 'disbursedAmount', 'netDisbursedAmount']);
+    final disbAmt = _num(row, ['totalDisbursedAmount', 'disbursedAmount', 'netDisbursedAmount', 'amount']);
     final sancAmt = _num(row, ['sanctionAmount', 'principalSanctioned']);
     final isClosedFlag = row['isClosedOrRejected'] == true;
 
+    // 1. Disbursed check FIRST: any active, delinquent, NPA, or closed/foreclosed loan
+    // that was actually disbursed (disbursedAmount > 0 or disbStatus/status disbursed) counts as Disbursed.
+    if (disbStatus.contains('disburs') ||
+        rawStatus == 'disb' ||
+        rawStatus.contains('disburs') ||
+        rawStatus.contains('active') ||
+        rawStatus.contains('delinquent') ||
+        rawStatus.contains('npa') ||
+        ((rawStatus.contains('closed') || rawStatus.contains('foreclos')) && disbAmt > 0) ||
+        disbAmt > 0 ||
+        (row['disbursementDate'] != null && row['disbursementDate'].toString().trim().isNotEmpty)) {
+      return FunnelStage.disbursed;
+    }
+
+    // 2. Pre-disbursement rejections / expiries / cancellations
     if (isClosedFlag ||
         rawStatus.contains('reject') ||
         rawStatus.contains('logout') ||
@@ -132,17 +147,7 @@ class PortfolioIntelligenceService {
       return FunnelStage.closedOrRejected;
     }
 
-    if (disbStatus.contains('disburs') ||
-        rawStatus == 'disb' ||
-        rawStatus.contains('disburs') ||
-        rawStatus.contains('active') ||
-        rawStatus.contains('delinquent') ||
-        rawStatus.contains('npa') ||
-        disbAmt > 0 ||
-        (row['disbursementDate'] != null && row['disbursementDate'].toString().trim().isNotEmpty)) {
-      return FunnelStage.disbursed;
-    }
-
+    // 3. Sanctioned (not yet disbursed)
     if (rawStatus == 'sanc' ||
         rawStatus == 'sancwip' ||
         rawStatus.contains('sanction') ||
