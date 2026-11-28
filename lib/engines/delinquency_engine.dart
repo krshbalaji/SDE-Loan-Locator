@@ -840,14 +840,21 @@ class DelinquencyEngine {
       bookBreakdown: () {
         final grouped = <String, List<LoanModel>>{};
         for (final l in activeLoans) {
-          final rawTag = (l.assetClassification ?? '').trim().toUpperCase();
+          final prodUpper = l.productId.trim().toUpperCase();
+          final isCoLend = prodUpper.startsWith('CO_') ||
+              prodUpper.startsWith('CO-') ||
+              prodUpper.contains('CO_LEND') ||
+              prodUpper.contains('CO-LEND') ||
+              prodUpper.contains('COLEND');
+          final rawTag = (l.assetClassification ?? '')
+              .trim()
+              .toUpperCase()
+              .replaceAll(RegExp(r'\s+'), ' ');
           final book = rawTag.isNotEmpty
               ? rawTag
               : (l.status == LoanStatus.restructured
                   ? 'RESTRUCTURED BOOK'
-                  : (l.productId.toUpperCase().contains('CO')
-                      ? 'CO LENDING'
-                      : 'OWN BOOK'));
+                  : (isCoLend ? 'CO LENDING' : 'OWN BOOK'));
           (grouped[book] ??= <LoanModel>[]).add(l);
         }
         return [
