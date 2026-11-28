@@ -62,7 +62,7 @@ class ConversionDeviationIntelligenceCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Login->Disb: ${funnel.loginToDisbursedCountPct.toStringAsFixed(1)}%',
+                  'L->D: ${funnel.loginToDisbursedCountPct.toStringAsFixed(1)}% cnt · ${funnel.loginToDisbursedAmountPct.toStringAsFixed(1)}% ₹',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -81,13 +81,13 @@ class ConversionDeviationIntelligenceCard extends StatelessWidget {
                 ),
                 _MetricPill(
                   label: 'Sanctioned',
-                  value: '${funnel.sanctionedCount} (${funnel.loginToSanctionCountPct.toStringAsFixed(1)}%)',
-                  sub: _fmtAmount(funnel.sanctionedAmount),
+                  value: '${funnel.sanctionedCount} (${funnel.loginToSanctionCountPct.toStringAsFixed(1)}% cnt)',
+                  sub: '${_fmtAmount(funnel.sanctionedAmount)} · ${funnel.loggedAmount > 0 ? ((funnel.sanctionedAmount / funnel.loggedAmount) * 100).toStringAsFixed(1) : "0.0"}% ₹',
                 ),
                 _MetricPill(
                   label: 'Disbursed',
-                  value: '${funnel.disbursedCount} (${funnel.sanctionToDisbursedCountPct.toStringAsFixed(1)}%)',
-                  sub: _fmtAmount(funnel.disbursedAmount),
+                  value: '${funnel.disbursedCount} (${funnel.sanctionToDisbursedCountPct.toStringAsFixed(1)}% S→D)',
+                  sub: '${_fmtAmount(funnel.disbursedAmount)} · ${funnel.sanctionToDisbursedAmountPct.toStringAsFixed(1)}% S→D ₹',
                 ),
                 _MetricPill(
                   label: 'Closed / Rejected',

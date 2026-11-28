@@ -30,6 +30,9 @@ class FunnelConversionSummary {
   double get loginToDisbursedCountPct =>
       loggedCount == 0 ? 0.0 : (disbursedCount / loggedCount) * 100.0;
 
+  double get sanctionToDisbursedAmountPct =>
+      sanctionedAmount == 0 ? 0.0 : (disbursedAmount / sanctionedAmount) * 100.0;
+
   double get loginToDisbursedAmountPct =>
       loggedAmount == 0 ? 0.0 : (disbursedAmount / loggedAmount) * 100.0;
 }

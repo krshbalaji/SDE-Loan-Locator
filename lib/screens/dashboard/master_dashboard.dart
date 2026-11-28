@@ -53,6 +53,8 @@ class _MasterDashboardState extends State<MasterDashboard> {
   String? _queueSearch;
   AgingBucket? _loanBucketFilter;
   String? _loanSearch;
+  String? _selectedDpdBucketKey;
+  String? _selectedPeriodLabel;
 
   Future<void> _showProductEditorDialog(
     LoanPortfolioProvider portfolio, {
@@ -589,41 +591,86 @@ class _MasterDashboardState extends State<MasterDashboard> {
                   const SizedBox(height: 10),
                   ...(() {
                     final buckets = kpi.sevenTierDpdBreakdown.values.toList();
-                    final maxPos = buckets.fold<double>(
-                      0.0,
-                      (m, e) => e.posAmount > m ? e.posAmount : m,
+                    final totalPos = buckets.fold<double>(0.0, (s, e) => s + e.posAmount);
+                    final activeBucket = buckets.firstWhere(
+                      (e) => e.bucket.name == _selectedDpdBucketKey,
+                      orElse: () => buckets.first,
                     );
+                    final activeShare = totalPos > 0 ? (activeBucket.posAmount / totalPos) * 100 : 0.0;
+                    const palette = [
+                      Color(0xFF1565C0),
+                      Color(0xFF00897B),
+                      Color(0xFFF9A825),
+                      Color(0xFFEF6C00),
+                      Color(0xFFD84315),
+                      Color(0xFFC62828),
+                      Color(0xFF6A1B9A),
+                    ];
                     return [
-                      for (final entry in buckets)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          height: 14,
+                          child: Row(
                             children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    entry.bucket.label,
-                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                              for (var i = 0; i < buckets.length; i++)
+                                if (buckets[i].posAmount > 0)
+                                  Expanded(
+                                    flex: ((buckets[i].posAmount / (totalPos > 0 ? totalPos : 1)) * 1000)
+                                        .round()
+                                        .clamp(1, 1000),
+                                    child: GestureDetector(
+                                      onTap: () => setState(
+                                        () => _selectedDpdBucketKey = buckets[i].bucket.name,
+                                      ),
+                                      child: Container(
+                                        color: palette[i % palette.length].withValues(
+                                          alpha: _selectedDpdBucketKey == null ||
+                                                  _selectedDpdBucketKey == buckets[i].bucket.name
+                                              ? 1.0
+                                              : 0.35,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                  Text(
-                                    '${IndianFormatters.formatInrCompact(entry.posAmount)} (${entry.loanCount})',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 3),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: LinearProgressIndicator(
-                                  value: maxPos > 0 ? (entry.posAmount / maxPos).clamp(0.0, 1.0) : 0.0,
-                                  minHeight: 6,
-                                ),
-                              ),
                             ],
                           ),
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${activeBucket.bucket.label}: ${IndianFormatters.formatInrCompact(activeBucket.posAmount)} '
+                                '(${activeBucket.loanCount} loans · ${activeShare.toStringAsFixed(1)}% of POS)',
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                final cat = activeBucket.bucket.order >= 5
+                                    ? CollectionCategory.npa
+                                    : activeBucket.bucket.order > 1
+                                        ? CollectionCategory.dpd
+                                        : CollectionCategory.regular;
+                                setState(() {
+                                  _queueCategoryFilter = cat;
+                                  _queueSearch = null;
+                                  _selectedIndex = 3;
+                                });
+                              },
+                              child: const Text('Open Queue'),
+                            ),
+                          ],
+                        ),
+                      ),
                     ];
                   })(),
                 ],
@@ -678,43 +725,53 @@ class _MasterDashboardState extends State<MasterDashboard> {
                 ],
                   const SizedBox(height: 8),
                   ...(() {
+                    final selectedPt = kpi.periodTrends.firstWhere(
+                      (pt) => pt.periodLabel == _selectedPeriodLabel,
+                      orElse: () => kpi.periodTrends.last,
+                    );
                     final maxDisb = kpi.periodTrends.fold<double>(
                       0.0,
                       (m, pt) => pt.disbursedAmount > m ? pt.disbursedAmount : m,
                     );
+                    final peakShare = maxDisb > 0 ? (selectedPt.disbursedAmount / maxDisb) * 100 : 0.0;
                     return [
-                      for (final pt in kpi.periodTrends)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 5),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 68,
-                                child: Text(
-                                  pt.periodLabel,
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Expanded(
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: LinearProgressIndicator(
-                                    value: maxDisb > 0
-                                        ? (pt.disbursedAmount / maxDisb).clamp(0.0, 1.0)
-                                        : 0.0,
-                                    minHeight: 6,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                IndianFormatters.formatInrCompact(pt.disbursedAmount),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final pt in kpi.periodTrends)
+                            ChoiceChip(
+                              label: Text(
+                                '${pt.periodLabel} · ${IndianFormatters.formatInrCompact(pt.disbursedAmount)}',
                                 style: const TextStyle(fontSize: 11),
                               ),
-                            ],
+                              selected: pt.periodLabel == selectedPt.periodLabel,
+                              onSelected: (_) => setState(() => _selectedPeriodLabel = pt.periodLabel),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${selectedPt.periodLabel}: Disb ${selectedPt.disbursedCount} '
+                              '(${IndianFormatters.formatInrCompact(selectedPt.disbursedAmount)}) · '
+                              'POS ${IndianFormatters.formatInrCompact(selectedPt.posAmount)} · '
+                              '${peakShare.toStringAsFixed(0)}% of peak',
+                              style: const TextStyle(fontSize: 12),
+                            ),
                           ),
-                        ),
+                          TextButton(
+                            onPressed: () => setState(() {
+                              _loanSearch = selectedPt.periodLabel;
+                              _loanBucketFilter = null;
+                              _selectedIndex = 1;
+                            }),
+                            child: const Text('Filter Loans'),
+                          ),
+                        ],
+                      ),
                     ];
                   })(),
 
